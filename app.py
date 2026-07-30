@@ -126,7 +126,6 @@ st.sidebar.markdown("---")
 st.sidebar.subheader("Parâmetros do Lado do Serviço")
 servico_sel = st.sidebar.selectbox("Fluido do Serviço (Utilidade)", list(BANCO_SERVICOS.keys()))
 
-# Bloqueio inteligente de inputs de temperatura caso o fluido seja latente (mudança de fase isotérmica)
 dados_serv_sel = BANCO_SERVICOS[servico_sel]
 if dados_serv_sel["tipo"] == "latente":
     t_in_serv = st.sidebar.number_input("Temp. Sat. do Serviço (°C)", value=120.0 if servico_sel == "Vapor Saturado" else -10.0)
@@ -146,24 +145,21 @@ if disparar_calculo:
     cp_prod = dados_fluido["cp"]
     area_por_placa = dados_modelo["area_placa"]
     
-    # Ajuste de penalização do coeficiente U com base na viscosidade do produto
     fator_viscosidade = 1.0 if produto == "Agua" else (1.0 / math.isqrt(int(dados_fluido["viscosidade"])))
     U_adotado = dados_modelo["U_base"] * fator_viscosidade
     
-    # 1. PROCESSAMENTO FÍSICO-MATEMÁTICO DO PRODUTO (Q = m * cp * dT)
+    # PROCESSAMENTO FÍSICO-MATEMÁTICO DO PRODUTO (Q = m * cp * dT)
     dT_prod = abs(t_in_prod - t_out_prod)
     carga_kw = (vazao_prod * cp_prod * dT_prod) / 3600.0
     
-    # 2. CÁLCULO RIGOROSO DO LADO DO SERVIÇO (Sensível vs Latente)
-    if dados_serv_sel["type" if 'type' in dados_serv_sel else "tipo"] == "latente":
-        # Para Vapor ou Amônia, Vazão = Q / Lambda (Calor Latente) -> Convertido de h para s
+    # CÁLCULO RIGOROSO DO LADO DO SERVIÇO (Sensível vs Latente)
+    if dados_serv_sel["tipo"] == "latente":
         vazao_serv = (carga_kw * 3600.0) / dados_serv_sel["latente"]
     else:
-        # Para Água ou Glicol, Vazão = Q / (cp * dT)
         dT_serv = abs(t_out_serv - t_in_serv)
         vazao_serv = (carga_kw * 3600.0) / (dados_serv_sel["cp"] * dT_serv) if dT_serv > 0 else 0
         
-    # 3. CÁLCULO DO LMTD (Média Logarítmica das Diferenças de Temperatura)
+    # CÁLCULO DO LMTD
     dt1 = t_in_prod - t_out_serv
     dt2 = t_out_prod - t_in_serv
     
@@ -172,7 +168,7 @@ if disparar_calculo:
     elif dt1 == dt2 and dt1 > 0:
         lmtd = dt1
     else:
-        lmtd = (abs(dt1) + abs(dt2)) / 2  # Abordagem de contingência mecânica para cruzamento térmico
+        lmtd = (abs(dt1) + abs(dt2)) / 2
         
     area_m2 = (carga_kw * 1000.0) / (U_adotado * lmtd) if lmtd > 0 else 0
     
@@ -187,13 +183,14 @@ if disparar_calculo:
     m_col3.metric("Quantidade de Placas", f"{placas} un")
     m_col4.metric(f"Vazão de {servico_sel}", f"{vazao_serv:.1f} kg/h")
 
-    # 4. INTELIGÊNCIA ARTIFICIAL ATUANDO COMO ENGENHEIRO CONSULTOR SÊNIOR
-    d_projeto = {"Modelo": modelo, "Tag": tag, "Projeto": projeto, "Produto": produto, "Vazao_Prod": vazao_prod, "Servico": servico_sel, "Vazao_Serv": round(vazao_serv, 1)}
-    contexto = {"dados": d_projeto, "calculado": {"kw": round(carga_kw, 2), "placas": placas, "area": round(area_m2, 2), "lmtd": round(lmtd, 2)}}
+    # INTELIGÊNCIA ARTIFICIAL ATUANDO COMO ENGENHEIRO CONSULTOR SÊNIOR
+    contexto_json = f'{{"modelo": "{modelo}", "produto": "{produto}", "carga_kw": {carga_kw:.1f}, "placas": {placas}, "servico": "{servico_sel}", "vazao_serv": {vazao_serv:.1f}}}'
+    prompt = f"Atue como Engenheiro Quimico Senior Especialista da AlfaVed. Analise os resultados: {contexto_json}. Escreva um Parecer Tecnico Descritivo (maximo 150 palavras) focando no material das gaxetas adequado (NBR, EPDM, ou gaxetas especiais para Vapor/Amonia), avalie o risco de incrustacao/congelamento do produto, e explique a vantagem deste utilitario específico no processo. Retorne APENAS o texto corrido, sem markdown e sem asteriscos."
     
-    prompt = (
-        "Atue como Engenheiro Quimico Senior Especialista em Trocadores de Calor da AlfaVed.\n"
-        "Analise o projeto: " + json.dumps(contexto) + ".\n"
-        "Escreva um Parecer Tecnico Descritivo (maximo 150 palavras) focando na escolha ideal do material das gaxetas "
-        "(NBR para óleos, EPDM para laticínios/água até 130C, ou Gaxetas especiais para Vapor/Amônia), "
-        "avalie o risco de incrustação/congelamento do produto, e explique por que a escolha deste utilitário específico "
+    parecer_ia = ""
+    try:
+        chave_segura = st.secrets["GEMINI_API_KEY"]
+        client = genai.Client(api_key=chave_segura)
+        response = client.models.generate_content(model='gemini-flash-latest', contents=prompt, config=dict(temperature=0.2))
+        parecer_ia = response.text.strip().replace("*", "")
+    except Exception:
