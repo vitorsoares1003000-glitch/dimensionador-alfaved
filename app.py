@@ -124,9 +124,9 @@ t_in_serv = st.sidebar.number_input("Temp. Entrada Serviço (°C)", value=0.0)
 t_out_serv = st.sidebar.number_input("Temp. Saída Serviço (°C)", value=12.0)
 
 st.sidebar.markdown("---")
-# CORREÇÃO GLOBAL: O botão de cálculo agora fica isolado no escopo principal para evitar anulação de cliques
 disparar_calculo = st.sidebar.button("Executar Cálculo Térmico Rigoroso", type="primary")
 
+# RENDERIZAÇÃO DIRETAMENTE NO ESCOPO CENTRAL (Sem abas e sem travas de estado)
 if disparar_calculo:
     dados_fluido = BANCO_FLUIDOS[produto]
     dados_modelo = BANCO_MODELOS[modelo]
@@ -150,7 +150,15 @@ if disparar_calculo:
     placas = math.ceil(area_m2 / area_por_placa) + 2
     if placas % 2 != 0: placas += 1
 
-    # Chamada Inteligente com a IA
+    # 1. EXIBIÇÃO IMEDIATA DOS CARDS DE MÉTRICAS
+    st.markdown("### 1. Indicadores Hidro-Térmicos Garantidos")
+    m_col1, m_col2, m_col3, m_col4 = st.columns(4)
+    m_col1.metric("Carga Térmica Total", f"{carga_kw:.2f} kW")
+    m_col2.metric("Área Efetiva Requerida", f"{area_m2:.2f} m²")
+    m_col3.metric("Quantidade de Placas", f"{placas} un")
+    m_col4.metric("Coeficiente Global U", f"{U_adotado:.0f} W/m².K")
+
+    # 2. CHAMADA COM A INTELIGÊNCIA ARTIFICIAL
     d_projeto = {"Modelo": modelo, "Tag": tag, "Projeto": projeto, "Produto": produto, "Vazao": vazao_prod}
     contexto = {"dados": d_projeto, "calculado": {"kw": round(carga_kw, 2), "placas": placas, "area": round(area_m2, 2), "area_unitaria_placa": area_por_placa}}
     prompt = "Atue como Engenheiro Quimico Senior Especialista em Trocadores de Calor da AlfaVed. Analise: " + json.dumps(contexto) + ". Escreva um Parecer Tecnico Descritivo (maximo 150 watts) focando no material das gaxetas adequado, risco de incrustacao do produto e avaliacao se o arranjo de " + str(placas) + " placas do modelo " + modelo + " atende com seguranca. Retorne APENAS o texto corrido do parecer, sem markdown e sem asteriscos."
@@ -164,7 +172,10 @@ if disparar_calculo:
     except Exception:
         parecer_ia = f"Parecer tecnico AlfaVed local. O processamento para o fluido {produto} no equipamento {modelo} indica uma demanda termica de {carga_kw:.2f} kW. Recomenda-se o uso estrito de gaxetas em EPDM para laticinios ate 130C ou NBR para oleos. Risco de incrustacao sob controle pelo regime de escoamento turbulento obtido pelo arranjo das {placas} placas de canal (area unitaria de {area_por_placa} m2). Equipamento homologado."
 
-    # Geração Segura do PDF em memória RAM
+    st.markdown("### 2. Parecer Técnico Consultivo (AlfaVed GenAI)")
+    st.info(parecer_ia)
+
+    # 3. GERAÇÃO DO PDF EM MEMÓRIA RAM
     pdf_buffer = io.BytesIO()
     doc = SimpleDocTemplate(pdf_buffer, pagesize=letter, rightMargin=54, leftMargin=54, topMargin=54, bottomMargin=54)
     story = [Paragraph("AlfaVed Solucoes Industriais", st_tit), Paragraph("DATASHEET TECNICO - ENGENHARIA ASSISTIDA POR IA", st_sub), Spacer(1, 10)]
@@ -172,4 +183,3 @@ if disparar_calculo:
     story.append(Paragraph("1. Informacoes Gerais do Projeto", st_h2))
     story.append(Table([[Paragraph("Item", st_th), Paragraph("Especificacao", st_th)], [Paragraph("Modelo Selecionado", st_tc), Paragraph(modelo, st_tc)], [Paragraph("Tag", st_tc), Paragraph(tag, st_tc)], [Paragraph("Projeto", st_tc), Paragraph(projeto, st_tc)]]))
     story.append(Paragraph("2. Parametros Operacionais Processados", st_h2))
-    story.append(Table([[Paragraph("Propriedade", st_th), Paragraph("Lado do Produto", st_th), Paragraph("Lado do Servico", st_th)], [Paragraph("Fluido", st_tc), Paragraph(produto, st_tc), Paragraph("Agua", st_tc)], [Paragraph("Temp Entrada", st_tc), Paragraph(f"{t_in_prod} C", st_tc), Paragraph(f"{t_in_serv} C", st_tc)], [Paragraph("Temp Saida", st_tc), Paragraph(f"{t_out_prod} C", st_tc), Paragraph(f"{t_out_serv} C", st_tc)], [Paragraph("Vazao Massica", st_tc), Paragraph(f"{vazao_prod} kg/h", st_tc), Paragraph(f"{vazao_serv:.1f} kg/h", st_tc)]]))
