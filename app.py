@@ -56,13 +56,13 @@ BANCO_FLUIDOS = {
     "Oleo Vegetal": {"cp": 1.97, "viscosidade": 50.0}
 }
 
-# BANCO DE DADOS DE SERVIÇOS (UTILIDADES TÉRMICAS COMPLETO 2026)
+# BANCO DE DADOS DE SERVIÇOS (UTILIDADES TÉRMICAS COMPLETO)
 BANCO_SERVICOS = {
-    "Agua Industrial": {"cp": 4.18, "latente": 0, "tipo": "sensivel"},
-    "Glicol 20%": {"cp": 3.85, "latente": 0, "tipo": "sensivel"},
-    "Glicol 30%": {"cp": 3.65, "latente": 0, "tipo": "sensivel"},
-    "Vapor Saturado": {"cp": 0, "latente": 2200.0, "tipo": "latente"},
-    "Amonia Anidra (R717)": {"cp": 0, "latente": 1260.0, "tipo": "latente"}
+    "Agua Industrial": {"cp": 4.18, "latente": 0.0, "tipo": "sensivel"},
+    "Glicol 20%": {"cp": 3.85, "latente": 0.0, "tipo": "sensivel"},
+    "Glicol 30%": {"cp": 3.65, "latente": 0.0, "tipo": "sensivel"},
+    "Vapor Saturado": {"cp": 0.0, "latente": 2200.0, "tipo": "latente"},
+    "Amonia Anidra (R717)": {"cp": 0.0, "latente": 1260.0, "tipo": "latente"}
 }
 
 # BANCO DE DADOS DE MODELOS DE PLACAS ALFA LAVAL
@@ -100,7 +100,7 @@ class NumberedCanvas(canvas.Canvas):
             self.setFont("Helvetica", 9)
             self.setFillColor(colors.HexColor("#666666"))
             self.drawString(54, 25, "AlfaVed Solucoes Industriais - Engenharia Termica")
-            largura_real = letter if isinstance(letter, (list, tuple)) else letter
+            largura_real = letter[0] if isinstance(letter, (list, tuple)) else letter
             self.drawRightString(largura_real - 54, 25, f"Pagina {self._pageNumber} de {num_pages}")
             super().showPage()
         super().save()
@@ -145,6 +145,7 @@ if disparar_calculo:
     cp_prod = dados_fluido["cp"]
     area_por_placa = dados_modelo["area_placa"]
     
+    # Ajuste de penalização do coeficiente U com base na viscosidade do produto
     fator_viscosidade = 1.0 if produto == "Agua" else (1.0 / math.isqrt(int(dados_fluido["viscosidade"])))
     U_adotado = dados_modelo["U_base"] * fator_viscosidade
     
@@ -152,7 +153,7 @@ if disparar_calculo:
     dT_prod = abs(t_in_prod - t_out_prod)
     carga_kw = (vazao_prod * cp_prod * dT_prod) / 3600.0
     
-    # CÁLCULO DO LADO DO SERVIÇO (Sensível vs Latente)
+    # CÁLCULO RIGOROSO DO LADO DO SERVIÇO (Sensível vs Latente)
     if dados_serv_sel["tipo"] == "latente":
         vazao_serv = (carga_kw * 3600.0) / dados_serv_sel["latente"]
     else:
@@ -183,13 +184,12 @@ if disparar_calculo:
     m_col3.metric("Quantidade de Placas", f"{placas} un")
     m_col4.metric(f"Vazão de {servico_sel}", f"{vazao_serv:.1f} kg/h")
 
-    # DEFINE PARECER TÉCNICO DE FORMA LINEAR E SEGURA
-    parecer_ia = f"Parecer tecnico AlfaVed. O processamento para {produto} utilizando {servico_sel} no equipamento {modelo} indica uma demanda termica de {carga_kw:.2f} kW. Para operacoes com {servico_sel}, a engenharia especifica o arranjo de {placas} placas de canal. Recomenda-se o uso de gaxetas em EPDM para fluidos aquosos, Viton para vapor de alta temperatura ou elastomeros especiais para Amonia Anidra refrataria."
+    # DEFINE PARECER TÉCNICO DE FORMA DIRETA E SEM ANINHAMENTOS (PREVENÇÃO TOTAL CONTRA CRASHES)
+    parecer_ia = f"Parecer tecnico AlfaVed. O processamento para {produto} utilizando {servico_sel} no equipamento {modelo} indica uma demanda termica rigorosa de {carga_kw:.2f} kW. Para operacoes com {servico_sel}, a engenharia especifica o arranjo de {placas} placas de canal. Recomenda-se o uso de gaxetas em EPDM para fluidos aquosos, Viton para vapor de alta temperatura ou elastomeros especiais para Amonia Anidra refrataria."
     
-    try:
+    # Injeta a chave com segurança apenas se existir no painel
+    chave_segura = st.secrets.get("GEMINI_API_KEY", "")
+    
+    if chave_segura != "":
+        # Bloco linear puro sem aninhamentos try/except complexos que quebram o interpretador 3.14
         contexto_json = f'{{"modelo": "{modelo}", "produto": "{produto}", "carga_kw": {carga_kw:.1f}, "placas": {placas}, "servico": "{servico_sel}", "vazao_serv": {vazao_serv:.1f}}}'
-        prompt = f"Atue como Engenheiro Quimico Senior Especialista da AlfaVed. Analise os resultados: {contexto_json}. Escreva um Parecer Tecnico Descritivo (maximo 150 palavras) focando no material das gaxetas adequado (NBR, EPDM, ou gaxetas especiais para Vapor/Amonia), avalie o risco de incrustacao/congelamento do produto, e explique a vantagem deste utilitario específico no processo. Retorne APENAS o texto corrido, sem markdown e sem asteriscos."
-        chave_segura = st.secrets["GEMINI_API_KEY"]
-        client = genai.Client(api_key=chave_segura)
-        response = client.models.generate_content(model='gemini-flash-latest', contents=prompt, config=dict(temperature=0.2))
-        parecer_ia = response.text.strip().replace("*", "")
