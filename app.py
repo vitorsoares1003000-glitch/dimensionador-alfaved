@@ -2,7 +2,6 @@ import streamlit as st
 import json
 import math
 import io
-import google.genai as genai
 
 # Configuração da página Web com layout expandido e responsivo
 st.set_page_config(page_title="AlfaVed Engenharia", page_icon="▲", layout="wide")
@@ -100,8 +99,7 @@ class NumberedCanvas(canvas.Canvas):
             self.setFont("Helvetica", 9)
             self.setFillColor(colors.HexColor("#666666"))
             self.drawString(54, 25, "AlfaVed Solucoes Industriais - Engenharia Termica")
-            # Extração segura da largura do papel (Índice 0) para o Python 3.14
-            largura_real = letter[0] if isinstance(letter, (list, tuple)) else letter
+            largura_real = letter if isinstance(letter, (list, tuple)) else letter
             self.drawRightString(largura_real - 54, 25, f"Pagina {self._pageNumber} de {num_pages}")
             super().showPage()
         super().save()
@@ -184,12 +182,20 @@ if disparar_calculo:
     m_col3.metric("Quantidade de Placas", f"{placas} un")
     m_col4.metric(f"Vazão de {servico_sel}", f"{vazao_serv:.1f} kg/h")
 
-    # RESTAURAÇÃO DO PARECER PADRÃO DA PRIMEIRA VERSÃO ESTÁVEL
-    parecer_ia = f"Parecer tecnico AlfaVed. O processamento para {produto} utilizando {servico_sel} no equipamento {modelo} indica uma demanda termica de {carga_kw:.2f} kW. Para operacoes com {servico_sel}, a engenharia especifica o arranjo de {placas} placas de canal (area unitaria de {area_por_placa} m2). Recomenda-se o uso de gaxetas em EPDM para fluidos aquosos/laticinios ate 130C, Viton para vapor ou elastomeros especiais para Amonia Anidra."
+    # --- BANCO DE REGRAS LOGICAS LOCAIS (SUBSTITUIÇÃO SÉNIOR DA IA) ---
+    gaxeta_material = "EPDM Standard"
+    risco_incrustacao = "baixo devido ao regime de escoamento turbulento gerado pelas placas de canal."
+    vantagem_utilidade = f"O uso de {servico_sel} confere alta estabilidade e controle preciso do delta T de processo."
+
+    if servico_sel == "Vapor Saturado":
+        gaxeta_material = "Viton de Alta Temperatura ou EPDM de Alta Densidade (HT)"
+        risco_incrustacao = f"alto na parede das placas devido ao choque termico com o produto {produto}. Recomenda-se rotina de limpeza CIP frequente."
+        vantagem_utilidade = "O Vapor Saturado opera com altissimo coeficiente de transmissao termica latente, reduzindo drasticamente o tamanho e o custo do equipamento."
     
-    # Chamada com o conector original (google-genai) da primeira vez que deu certo
-    chave_segura = st.secrets.get("GEMINI_API_KEY", "")
-    if chave_segura != "":
-        try:
-            client = genai.Client(api_key=chave_segura)
-            contexto_json = f'{{"modelo": "{modelo}", "produto": "{produto}", "carga_kw": {carga_kw:.1f}, "placas": {placas}, "servico": "{servico_sel}", "vazao_serv": {vazao_serv:.1f}}}'
+    if servico_sel == "Amonia Anidra (R717)":
+        gaxeta_material = "Neoprene Especial ou Cloroprene resistente a refrigerantes industriais"
+        risco_incrustacao = "baixo, contudo ha risco de congelamento localizado caso a temperatura de parede caia abaixo do ponto de fusao do produto."
+        vantagem_utilidade = "A Amonia Anidra aproveita a entalpia latente de evaporacao constante, ideal para processos de resfriamento rapido em laticinios e liofilizacao."
+
+    if produto == "Oleo Vegetal":
+        gaxeta_material = "NBR Nitrilica Nitrilada (resistente a ataques de lipidios e hidrocarbonetos)"
