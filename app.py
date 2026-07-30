@@ -56,7 +56,10 @@ class NumberedCanvas(canvas.Canvas):
             self.setFont("Helvetica", 9)
             self.setFillColor(colors.HexColor("#666666"))
             self.drawString(54, 25, "AlfaVed Solucoes Industriais - Engenharia Termica")
-            largura_real = letter if isinstance(letter, (list, tuple)) else letter
+            
+            # CORREÇÃO DEFINITIVA EXTRAINDO O ÍNDICE 0 DA TUPLA (LARGURA DO PAPEL)
+            largura_real = letter[0] if isinstance(letter, (list, tuple)) else letter
+            
             self.drawRightString(largura_real - 54, 25, f"Pagina {self._pageNumber} de {num_pages}")
             super().showPage()
         super().save()
@@ -68,7 +71,6 @@ st.subheader("Painel de Dimensionamento Hidro-Térmico de Alta Precisão")
 # Barra Lateral (Formulário)
 st.sidebar.header("Dados de Entrada do Projeto")
 
-# MODELO DINÂMICO EXPANDIDO
 modelo = st.sidebar.selectbox("Modelo do Equipamento (Alfa Laval)", list(BANCO_MODELOS.keys()))
 tag = st.sidebar.text_input("Tag do Equipamento", "TC-101")
 projeto = st.sidebar.text_input("Número do Projeto", "PRJ-ALFAVED-2026")
@@ -94,7 +96,6 @@ if st.sidebar.button("Calcular e Gerar Parecer", type="primary"):
     cp_prod = dados_fluido["cp"]
     area_por_placa = dados_modelo["area_placa"]
     
-    # Ajuste de penalização do coeficiente U com base na viscosidade do produto
     fator_viscosidade = 1.0 if produto == "Agua" else (1.0 / math.isqrt(int(dados_fluido["viscosidade"])))
     U_adotado = dados_modelo["U_base"] * fator_viscosidade
     
@@ -108,7 +109,6 @@ if st.sidebar.button("Calcular e Gerar Parecer", type="primary"):
     lmtd = (dt1 - dt2) / math.log(dt1 / dt2) if dt1 > 0 and dt2 > 0 and dt1 != dt2 else (dt1 or 1)
     area_m2 = (carga_kw * 1000.0) / (U_adotado * lmtd) if lmtd > 0 else 0
     
-    # Cálculo dinâmico automatizado com base no catálogo selecionado
     placas = math.ceil(area_m2 / area_por_placa) + 2
     if placas % 2 != 0: placas += 1
 
@@ -160,5 +160,3 @@ if st.sidebar.button("Calcular e Gerar Parecer", type="primary"):
     pdf_buffer.close()
 
     st.markdown("---")
-
-
