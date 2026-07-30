@@ -42,8 +42,9 @@ class NumberedCanvas(canvas.Canvas):
             self.setFont("Helvetica", 9)
             self.setFillColor(colors.HexColor("#666666"))
             self.drawString(54, 25, "AlfaVed Solucoes Industriais - Engenharia Termica")
-            largura_folha = letter if isinstance(letter, tuple) else letter
-            self.drawRightString(largura_folha - 54, 25, f"Pagina {self._pageNumber} de {num_pages}")
+            # CORREÇÃO DA TUPLA PARA PYTHON 3.14: Extrai explicitamente a largura do papel (índice 0)
+            largura_real = letter[0] if isinstance(letter, (list, tuple)) else letter
+            self.drawRightString(largura_real - 54, 25, f"Pagina {self._pageNumber} de {num_pages}")
             super().showPage()
         super().save()
 
@@ -95,13 +96,12 @@ if st.sidebar.button("Calcular e Gerar Parecer", type="primary"):
     col3.metric("Quantidade de Placas", f"{placas} placas")
 
     # Chamada com o Painel de Segurança do Streamlit Secrets (Chave Criptografada)
-    d_projeto = {"Modelo": modelo, "Tag": tag, "Projeto": project if 'project' in locals() else projeto, "Produto": produto, "Vazao": vazao_prod}
+    d_projeto = {"Modelo": modelo, "Tag": tag, "Projeto": projeto, "Produto": produto, "Vazao": vazao_prod}
     contexto = {"dados": d_projeto, "calculado": {"kw": round(carga_kw, 2), "placas": placas, "area": round(area_m2, 2)}}
     prompt = "Atue como Engenheiro Quimico Senior Especialista em Trocadores de Calor da AlfaVed. Analise: " + json.dumps(contexto) + ". Escreva um Parecer Tecnico Descritivo (maximo 150 palavras) focando no material das gaxetas adequado, risco de incrustacao do produto e compatibilidade do modelo. Retorne APENAS o texto corrido do parecer, sem markdown e sem asteriscos."
     
     parecer_ia = ""
     try:
-        # Puxa a chave secreta guardada de forma oculta na nuvem
         chave_segura = st.secrets["GEMINI_API_KEY"]
         client = genai.Client(api_key=chave_segura)
         response = client.models.generate_content(model='gemini-flash-latest', contents=prompt, config=dict(temperature=0.2))
@@ -140,3 +140,4 @@ if st.sidebar.button("Calcular e Gerar Parecer", type="primary"):
     st.download_button(label="📥 Baixar Datasheet Técnico Oficial PDF", data=pdf_data, file_name=f"Datasheet_{tag}.pdf", mime="application/pdf")
 else:
     st.warning("Insira as especificações operacionais na barra lateral e clique em 'Calcular e Gerar Parecer'.")
+
