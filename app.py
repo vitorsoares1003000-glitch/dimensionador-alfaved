@@ -25,9 +25,11 @@ st.markdown("""
             transform: scale(1.02) !important;
         }
         div[data-testid="stMetricSimpleValue"] { font-size: 24px !important; font-weight: bold !important; color: #003049 !important; }
-        .datasheet-box { background-color: #ffffff; padding: 25px; border-radius: 8px; border: 1px solid #cccccc; margin-top: 20px; }
-        .datasheet-title { font-size: 20px; font-weight: bold; color: #0d1b2a; border-bottom: 2px solid #d90429; padding-bottom: 5px; margin-bottom: 15px; }
-        .datasheet-sec { font-size: 14px; font-weight: bold; color: #003049; margin-top: 15px; margin-bottom: 5px; }
+        
+        /* Box do Datasheet Premium */
+        .datasheet-box { background-color: #ffffff; padding: 30px; border-radius: 8px; border: 1px solid #e0e0e0; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
+        .datasheet-title { font-size: 22px; font-weight: bold; color: #0d1b2a; border-bottom: 2px solid #d90429; padding-bottom: 8px; margin-bottom: 20px; text-align: center; }
+        .datasheet-sec { font-size: 14px; font-weight: bold; color: #003049; margin-top: 20px; margin-bottom: 10px; border-bottom: 1px solid #eeeeee; padding-bottom: 3px; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -94,87 +96,98 @@ else:
 st.sidebar.markdown("---")
 disparar_calculo = st.sidebar.button("Executar Cálculo Térmico Rigoroso", type="primary")
 
-if disparar_calculo:
-    dados_fluido = BANCO_FLUIDOS[produto]
-    dados_modelo = BANCO_MODELOS[modelo]
+# MOTOR DE PROCESSO MATEMÁTICO CORE
+dados_fluido = BANCO_FLUIDOS[produto]
+dados_modelo = BANCO_MODELOS[modelo]
+cp_prod = dados_fluido["cp"]
+area_por_placa = dados_modelo["area_placa"]
+
+fator_viscosidade = 1.0 if produto == "Agua" else (1.0 / math.isqrt(int(dados_fluido["viscosidade"])))
+U_adotado = dados_modelo["U_base"] * fator_viscosidade
+
+dT_prod = abs(t_in_prod - t_out_prod)
+carga_kw = (vazao_prod * cp_prod * dT_prod) / 3600.0
+
+if dados_serv_sel["tipo"] == "latente":
+    vazao_serv = (carga_kw * 3600.0) / dados_serv_sel["latente"]
+else:
+    dT_serv = abs(t_out_serv - t_in_serv)
+    vazao_serv = (carga_kw * 3600.0) / (dados_serv_sel["cp"] * dT_serv) if dT_serv > 0 else 0
     
-    cp_prod = dados_fluido["cp"]
-    area_por_placa = dados_modelo["area_placa"]
+dt1 = t_in_prod - t_out_serv
+dt2 = t_out_prod - t_in_serv
+
+if dt1 > 0 and dt2 > 0 and dt1 != dt2:
+    lmtd = (dt1 - dt2) / math.log(dt1 / dt2)
+elif dt1 == dt2 and dt1 > 0:
+    lmtd = dt1
+else:
+    lmtd = (abs(dt1) + abs(dt2)) / 2
     
-    fator_viscosidade = 1.0 if produto == "Agua" else (1.0 / math.isqrt(int(dados_fluido["viscosidade"])))
-    U_adotado = dados_modelo["U_base"] * fator_viscosidade
-    
-    # PROCESSAMENTO FÍSICO-MATEMÁTICO DO PRODUTO
-    dT_prod = abs(t_in_prod - t_out_prod)
-    carga_kw = (vazao_prod * cp_prod * dT_prod) / 3600.0
-    
-    # CÁLCULO RIGOROSO DO LADO DO SERVIÇO
-    if dados_serv_sel["tipo"] == "latente":
-        vazao_serv = (carga_kw * 3600.0) / dados_serv_sel["latente"]
-    else:
-        dT_serv = abs(t_out_serv - t_in_serv)
-        vazao_serv = (carga_kw * 3600.0) / (dados_serv_sel["cp"] * dT_serv) if dT_serv > 0 else 0
+area_m2 = (carga_kw * 1000.0) / (U_adotado * lmtd) if lmtd > 0 else 0
+
+placas = math.ceil(area_m2 / area_por_placa) + 2
+if placas % 2 != 0: placas += 1
+
+# BANCO DE REGRAS LÓGICAS LOCAIS
+gaxeta_material = "EPDM Standard"
+risco_incrustacao = "baixo devido ao regime de escoamento turbulento gerado pelas placas de canal."
+vantagem_utilidade = f"O uso de {servico_sel} confere alta estabilidade e controle preciso do delta T de processo."
+
+if servico_sel == "Vapor Saturado":
+    gaxeta_material = "Viton de Alta Temperatura ou EPDM de Alta Densidade (HT)"
+    risco_incrustacao = f"alto na parede das placas devido ao choque térmico com o produto {produto}. Recomenda-se CIP frequente."
+    vantagem_utilidade = "O Vapor Saturado opera com altíssimo coeficiente de transmissão térmica latente, reduzindo o tamanho do equipamento."
+
+if servico_sel == "Amonia Anidra (R717)":
+    gaxeta_material = "Neoprene Especial ou Cloroprene resistente a refrigerantes industriais"
+    risco_incrustacao = "baixo, contudo há risco de congelamento localizado caso a temperatura de parede caia abaixo do ponto de fusão do produto."
+    vantagem_utilidade = "A Amônia Anidra aproveita a entalpia latente de evaporação constante, ideal para processos de resfriamento rápido."
+
+if produto == "Oleo Vegetal":
+    gaxeta_material = "NBR Nitrílica Nitrilada (resistente a ataques de lipídios e hidrocarbonetos)"
+    risco_incrustacao = "moderado por deposição de gorduras viscosas frias. O arranjo exige velocidade de escoamento controlada."
+
+parecer_ia = f"O dimensionamento para o fluido {produto} operando com o utilitário {servico_sel} no modelo {modelo} indica uma demanda térmica de {carga_kw:.2f} kW. Para conter esse processo com total estanqueidade, a engenharia especifica o uso de gaxetas em {gaxeta_material}. O risco de incrustação ou degradação do produto é classificado como {risco_incrustacao} {vantagem_utilidade} Arranjo final homologado com {placas} placas paralelas (área unitária de {area_por_placa} m²) e coeficiente global de {U_adotado:.0f} W/m².K."
+
+# --- CRIAÇÃO DAS ABAS FIXAS INDEPENDENTES DE CONTROLADORES ---
+tab_painel, tab_datasheet, tab_ram = st.tabs(["📊 Painel de Controle", "📄 Folha de Dados Técnicos", "🗄️ Parâmetros RAM"])
+
+with tab_ram:
+    st.markdown("### Constantes Térmicas Firas e Indexadas")
+    col_f, col_m = st.columns(2)
+    col_f.markdown("**Fluidos Cadastrados (kJ/kg.C):**")
+    col_f.json(BANCO_FLUIDOS)
+    col_m.markdown("**Modelos Alfa Laval Geométricos (m²):**")
+    col_m.json(BANCO_MODELOS)
+
+with tab_painel:
+    if disparar_calculo:
+        st.markdown("### 📊 Indicadores Hidro-Térmicos Rápidos")
+        m_col1, m_col2, m_col3, m_col4 = st.columns(4)
+        m_col1.metric("Carga Térmica Total", f"{carga_kw:.2f} kW")
+        m_col2.metric("Área Efetiva Requerida", f"{area_m2:.2f} m²")
+        m_col3.metric("Quantidade de Placas", f"{placas} un")
+        m_col4.metric(f"Vazão de {servico_sel}", f"{vazao_serv:.1f} kg/h")
         
-    # CÁLCULO DO LMTD
-    dt1 = t_in_prod - t_out_serv
-    dt2 = t_out_prod - t_in_serv
-    
-    if dt1 > 0 and dt2 > 0 and dt1 != dt2:
-        lmtd = (dt1 - dt2) / math.log(dt1 / dt2)
-    elif dt1 == dt2 and dt1 > 0:
-        lmtd = dt1
+        st.markdown("---")
+        st.markdown("### 💡 Resumo do Parecer Consultivo")
+        st.info(parecer_ia)
+        st.caption("👉 Acesse a aba **'Folha de Dados Técnicos'** no menu superior para visualizar o laudo técnico completo formatado.")
     else:
-        lmtd = (abs(dt1) + abs(dt2)) / 2
+        st.info("💡 Insira as especificações operacionais na barra lateral esquerda e clique em 'Executar Cálculo Térmico Rigoroso' para iniciar.")
+
+with tab_datasheet:
+    if disparar_calculo:
+        st.markdown('<div class="datasheet-box">', unsafe_allow_html=True)
+        st.markdown('<div class="datasheet-title">FOLHA DE DADOS TÉCNICOS - ALFAVED</div>', unsafe_allow_html=True)
         
-    area_m2 = (carga_kw * 1000.0) / (U_adotado * lmtd) if lmtd > 0 else 0
-    
-    placas = math.ceil(area_m2 / area_por_placa) + 2
-    if placas % 2 != 0: placas += 1
-
-    # EXIBIÇÃO IMEDIATA DOS CARDS DE MÉTRICAS DO SOFTWARE
-    st.markdown("### 📊 Indicadores Hidro-Térmicos Garantidos")
-    m_col1, m_col2, m_col3, m_col4 = st.columns(4)
-    m_col1.metric("Carga Térmica Total", f"{carga_kw:.2f} kW")
-    m_col2.metric("Área Efetiva Requerida", f"{area_m2:.2f} m²")
-    m_col3.metric("Quantidade de Placas", f"{placas} un")
-    m_col4.metric(f"Vazão de {servico_sel}", f"{vazao_serv:.1f} kg/h")
-
-    # --- BANCO DE REGRAS LÓGICAS LOCAIS (REVISÃO DO PARECER SÊNIOR) ---
-    gaxeta_material = "EPDM Standard"
-    risco_incrustacao = "baixo devido ao regime de escoamento turbulento gerado pelas placas de canal."
-    vantagem_utilidade = f"O uso de {servico_sel} confere alta estabilidade e controle preciso do delta T de processo."
-
-    if servico_sel == "Vapor Saturado":
-        gaxeta_material = "Viton de Alta Temperatura ou EPDM de Alta Densidade (HT)"
-        risco_incrustacao = f"alto na parede das placas devido ao choque termico com o produto {produto}. Recomenda-se rotina de limpeza CIP frequente."
-        vantagem_utilidade = "O Vapor Saturado opera com altissimo coeficiente de transmissão térmica latente, reduzindo drasticamente o tamanho e o custo do equipamento."
-    
-    if servico_sel == "Amonia Anidra (R717)":
-        gaxeta_material = "Neoprene Especial ou Cloroprene resistente a refrigerantes industriais"
-        risco_incrustacao = "baixo, contudo há risco de congelamento localizado caso a temperatura de parede caia abaixo do ponto de fusão do produto."
-        vantagem_utilidade = "A Amônia Anidra aproveita a entalpia latente de evaporação constante, ideal para processos de resfriamento rápido em laticínios."
-
-    if produto == "Oleo Vegetal":
-        gaxeta_material = "NBR Nitrílica Nitrilada (resistente a ataques de lipídios e hidrocarbonetos)"
-        risco_incrustacao = "moderado por deposição de gorduras viscosas frias. O arranjo exige velocidade de escoamento controlada."
-
-    parecer_ia = f"O dimensionamento para o fluido {produto} operando com o utilitário {servico_sel} no modelo {modelo} indica uma demanda térmica de {carga_kw:.2f} kW. Para conter esse processo com total estanqueidade, a engenharia especifica o uso de gaxetas em {gaxeta_material}. O risco de incrustação ou degradação do produto é classificado como {risco_incrustacao} {vantagem_utilidade} Arranjo final homologado com {placas} placas paralelas (área unitária de {area_por_placa} m²) e coeficiente global de {U_adotado:.0f} W/m².K."
-
-    # --- 📄 VISUALIZAÇÃO DIRETA DO DATASHEET CORPORATIVO NA TELA ---
-    st.markdown("---")
-    st.markdown('<div class="datasheet-box">', unsafe_allow_html=True)
-    st.markdown('<div class="datasheet-title">FOLHA DE DADOS TÉCNICOS - ALFAVED</div>', unsafe_allow_html=True)
-    
-    st.markdown('<div class="datasheet-sec">1. INFORMAÇÕES GERAIS DO PROJETO</div>', unsafe_allow_html=True)
-    st.write(f"**Modelo Selecionado:** {modelo} | **Tag do Equipamento:** {tag} | **Número do Projeto:** {projeto}")
-    
-    st.markdown('<div class="datasheet-sec">2. PARÂMETROS OPERACIONAIS DO PROCESSO</div>', unsafe_allow_html=True)
-    st.write(f"**Lado do Produto ({produto}):** Entrada {t_in_prod}°C -> Saída {t_out_prod}°C | Vazão: {vazao_prod} kg/h")
-    st.write(f"**Lado do Serviço ({servico_sel}):** Entrada {t_in_serv}°C -> Saída {t_out_serv}°C | Vazão Requerida: {vazao_serv:.1f} kg/h")
-    
-    st.markdown('<div class="datasheet-sec">3. RESULTADOS DO DIMENSIONAMENTO HIDRO-TÉRMICO</div>', unsafe_allow_html=True)
-    st.write(f"**Carga Térmica de Troca:** {carga_kw:.2f} kW | **Área Efetiva Requerida:** {area_m2:.2f} m²")
-    st.write(f"**Quantidade Final de Placas:** {placas} un | **Área por Placa Geometria:** {area_por_placa} m²")
-    st.write(f"**Média Logarítmica (LMTD):** {lmtd:.1f}°C | **Coeficiente de Troca Adotado (U):** {U_adotado:.0f} W/m².K")
-    
-    st.markdown('<div class="datasheet-sec">4. MEMORIAL DESCRITIVO E PARECER DA ENGENHARIA</div>', unsafe_allow_html=True)
+        # SEÇÃO 1 - COLUNAS GERAIS
+        st.markdown('<div class="datasheet-sec">1. INFORMAÇÕES GERAIS DO PROJETO</div>', unsafe_allow_html=True)
+        g_col1, g_col2, g_col3 = st.columns(3)
+        g_col1.write(f"**Modelo Equipamento:** {modelo}")
+        g_col2.write(f"**Tag Equipamento:** {tag}")
+        g_col3.write(f"**Número do Projeto:** {projeto}")
+        
+        # SEÇÃO 2 - COLUNAS DO PROCESSO SEPARADAS POR LADO (PRODUTO VS SERVIÇO)
+        st.markdown('<div class="datasheet-sec">2. PARÂMETROS OPERACIONAIS DO PROCESSO</div>', unsafe_allow_html=True)
