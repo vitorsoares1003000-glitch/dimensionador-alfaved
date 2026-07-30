@@ -16,9 +16,8 @@ from reportlab.pdfgen import canvas
 # --- INJEÇÃO DE DESIGN E APARÊNCIA CUSTOMIZADA (CSS) ---
 st.markdown("""
     <style>
-        /* Customização do Título e Topo */
-        .main-title { font-size: 32px; font-weight: bold; color: #0d1b2a; margin-bottom: 5px; }
-        .sub-title { font-size: 16px; color: #666666; margin-bottom: 25px; }
+        .main-hdr { font-size: 32px; font-weight: bold; color: #0d1b2a; margin-bottom: 2px; }
+        .sub-hdr { font-size: 15px; color: #555555; margin-bottom: 20px; }
         
         /* Customização dos botões Streamlit */
         div.stButton > button:first-child {
@@ -49,12 +48,8 @@ st.markdown("""
         div.stDownloadButton > button:first-child:hover {
             background-color: #17252a !important;
         }
-    </style>
-""", unsafe_unsafe_limit_css=True) if False else st.markdown("""
-    <style>
-        .main-hdr { font-size: 32px; font-weight: bold; color: #0d1b2a; margin-bottom: 2px; }
-        .sub-hdr { font-size: 15px; color: #555555; margin-bottom: 20px; }
-        /* Forçar cantos arredondados nos cards de métricas */
+        
+        /* Ajuste de tamanho das métricas */
         div[data-testid="stMetricSimpleValue"] { font-size: 24px !important; font-weight: bold !important; color: #003049 !important; }
     </style>
 """, unsafe_allow_html=True)
@@ -174,7 +169,7 @@ with tab_resultados:
         # Chamada Inteligente com a IA
         d_projeto = {"Modelo": modelo, "Tag": tag, "Projeto": projeto, "Produto": produto, "Vazao": vazao_prod}
         contexto = {"dados": d_projeto, "calculado": {"kw": round(carga_kw, 2), "placas": placas, "area": round(area_m2, 2), "area_unitaria_placa": area_por_placa}}
-        prompt = "Atue como Engenheiro Quimico Senior Especialista em Trocadores de Calor da AlfaVed. Analise: " + json.dumps(contexto) + ". Escreva um Parecer Tecnico Descritivo (maximo 150 palavras) focando no material das gaxetas adequado, risco de incrustacao do produto e avaliacao se o arranjo de " + str(placas) + " placas do modelo " + modelo + " atende com seguranca. Retorne APENAS o texto corrido do parecer, sem markdown e sem asteriscos."
+        prompt = "Atue como Engenheiro Quimico Senior Especialista em Trocadores de Calor da AlfaVed. Analise: " + json.dumps(contexto) + ". Escreva um Parecer Tecnico Descritivo (maximo 150 watts) focando no material das gaxetas adequado, risco de incrustacao do produto e avaliacao se o arranjo de " + str(placas) + " placas do modelo " + modelo + " atende com seguranca. Retorne APENAS o texto corrido do parecer, sem markdown e sem asteriscos."
         
         parecer_ia = ""
         try:
@@ -188,3 +183,6 @@ with tab_resultados:
         st.markdown("### 2. Parecer Técnico Consultivo (AlfaVed GenAI)")
         st.info(parecer_ia)
 
+        # Geração Segura do PDF em memória RAM
+        pdf_buffer = io.BytesIO()
+        doc = SimpleDocTemplate(pdf_buffer, pagesize=letter, rightMargin=54, leftMargin=54, topMargin=54, bottomMargin=54)
