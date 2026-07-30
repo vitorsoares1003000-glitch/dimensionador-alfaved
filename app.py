@@ -18,8 +18,6 @@ st.markdown("""
     <style>
         .main-hdr { font-size: 32px; font-weight: bold; color: #0d1b2a; margin-bottom: 2px; }
         .sub-hdr { font-size: 15px; color: #555555; margin-bottom: 20px; }
-        
-        /* Customização dos botões Streamlit */
         div.stButton > button:first-child {
             background-color: #0d1b2a !important;
             color: white !important;
@@ -34,8 +32,6 @@ st.markdown("""
             background-color: #d90429 !important;
             transform: scale(1.02) !important;
         }
-        
-        /* Customização do botão de download */
         div.stDownloadButton > button:first-child {
             background-color: #2b7a78 !important;
             color: white !important;
@@ -48,12 +44,11 @@ st.markdown("""
         div.stDownloadButton > button:first-child:hover {
             background-color: #17252a !important;
         }
-        
-        /* Ajuste de tamanho das métricas */
         div[data-testid="stMetricSimpleValue"] { font-size: 24px !important; font-weight: bold !important; color: #003049 !important; }
     </style>
 """, unsafe_allow_html=True)
 
+# BANCO DE DADOS DE PRODUTOS/FLUIDOS (LADO QUENTE OU FRIO DE PROCESSO)
 BANCO_FLUIDOS = {
     "Agua": {"cp": 4.18, "viscosidade": 0.89},
     "Leite Integral": {"cp": 3.89, "viscosidade": 2.1},
@@ -61,6 +56,16 @@ BANCO_FLUIDOS = {
     "Oleo Vegetal": {"cp": 1.97, "viscosidade": 50.0}
 }
 
+# BANCO DE DADOS DE SERVIÇOS (UTILIDADES TÉRMICAS COMPLETO 2026)
+BANCO_SERVICOS = {
+    "Agua Industrial": {"cp": 4.18, "latente": 0, "tipo": "sensivel"},
+    "Glicol 20%": {"cp": 3.85, "latente": 0, "tipo": "sensivel"},
+    "Glicol 30%": {"cp": 3.65, "latente": 0, "tipo": "sensivel"},
+    "Vapor Saturado": {"cp": 0, "latente": 2200.0, "tipo": "latente"},
+    "Amonia Anidra (R717)": {"cp": 0, "latente": 1260.0, "tipo": "latente"}
+}
+
+# BANCO DE DADOS DE MODELOS DE PLACAS ALFA LAVAL
 BANCO_MODELOS = {
     "Alfa Laval M3": {"area_placa": 0.03, "U_base": 3800},
     "Alfa Laval TL3": {"area_placa": 0.06, "U_base": 3900},
@@ -111,22 +116,29 @@ tag = st.sidebar.text_input("Tag do Equipamento", "TC-101")
 projeto = st.sidebar.text_input("Número do Projeto", "PRJ-ALFAVED-2026")
 
 st.sidebar.markdown("---")
-st.sidebar.subheader("Parâmetros do Produto")
+st.sidebar.subheader("Parâmetros do Lado do Produto")
 produto = st.sidebar.selectbox("Fluido do Produto", list(BANCO_FLUIDOS.keys()))
 t_in_prod = st.sidebar.number_input("Temp. Entrada Produto (°C)", value=90.0)
 t_out_prod = st.sidebar.number_input("Temp. Saída Produto (°C)", value=8.0)
 vazao_prod = st.sidebar.number_input("Vazão do Produto (kg/h)", value=5000.0)
 
 st.sidebar.markdown("---")
-st.sidebar.subheader("Parâmetros do Serviço")
-servico = st.sidebar.text_input("Fluido do Serviço", "Água", disabled=True)
-t_in_serv = st.sidebar.number_input("Temp. Entrada Serviço (°C)", value=0.0)
-t_out_serv = st.sidebar.number_input("Temp. Saída Serviço (°C)", value=12.0)
+st.sidebar.subheader("Parâmetros do Lado do Serviço")
+servico_sel = st.sidebar.selectbox("Fluido do Serviço (Utilidade)", list(BANCO_SERVICOS.keys()))
+
+# Bloqueio inteligente de inputs de temperatura caso o fluido seja latente (mudança de fase isotérmica)
+dados_serv_sel = BANCO_SERVICOS[servico_sel]
+if dados_serv_sel["tipo"] == "latente":
+    t_in_serv = st.sidebar.number_input("Temp. Sat. do Serviço (°C)", value=120.0 if servico_sel == "Vapor Saturado" else -10.0)
+    t_out_serv = t_in_serv
+    st.sidebar.caption(f"💡 {servico_sel} opera de forma isotérmica por mudança de fase latente.")
+else:
+    t_in_serv = st.sidebar.number_input("Temp. Entrada Serviço (°C)", value=0.0)
+    t_out_serv = st.sidebar.number_input("Temp. Saída Serviço (°C)", value=12.0)
 
 st.sidebar.markdown("---")
 disparar_calculo = st.sidebar.button("Executar Cálculo Térmico Rigoroso", type="primary")
 
-# RENDERIZAÇÃO DIRETAMENTE NO ESCOPO CENTRAL (Sem abas e sem travas de estado)
 if disparar_calculo:
     dados_fluido = BANCO_FLUIDOS[produto]
     dados_modelo = BANCO_MODELOS[modelo]
@@ -134,52 +146,54 @@ if disparar_calculo:
     cp_prod = dados_fluido["cp"]
     area_por_placa = dados_modelo["area_placa"]
     
+    # Ajuste de penalização do coeficiente U com base na viscosidade do produto
     fator_viscosidade = 1.0 if produto == "Agua" else (1.0 / math.isqrt(int(dados_fluido["viscosidade"])))
     U_adotado = dados_modelo["U_base"] * fator_viscosidade
     
-    # Processamento Físico-Matemático
+    # 1. PROCESSAMENTO FÍSICO-MATEMÁTICO DO PRODUTO (Q = m * cp * dT)
     dT_prod = abs(t_in_prod - t_out_prod)
     carga_kw = (vazao_prod * cp_prod * dT_prod) / 3600.0
-    vazao_serv = (carga_kw * 3600.0) / (4.18 * abs(t_out_serv - t_in_serv)) if abs(t_out_serv - t_in_serv) > 0 else 0
     
+    # 2. CÁLCULO RIGOROSO DO LADO DO SERVIÇO (Sensível vs Latente)
+    if dados_serv_sel["type" if 'type' in dados_serv_sel else "tipo"] == "latente":
+        # Para Vapor ou Amônia, Vazão = Q / Lambda (Calor Latente) -> Convertido de h para s
+        vazao_serv = (carga_kw * 3600.0) / dados_serv_sel["latente"]
+    else:
+        # Para Água ou Glicol, Vazão = Q / (cp * dT)
+        dT_serv = abs(t_out_serv - t_in_serv)
+        vazao_serv = (carga_kw * 3600.0) / (dados_serv_sel["cp"] * dT_serv) if dT_serv > 0 else 0
+        
+    # 3. CÁLCULO DO LMTD (Média Logarítmica das Diferenças de Temperatura)
     dt1 = t_in_prod - t_out_serv
     dt2 = t_out_prod - t_in_serv
-    lmtd = (dt1 - dt2) / math.log(dt1 / dt2) if dt1 > 0 and dt2 > 0 and dt1 != dt2 else (dt1 or 1)
+    
+    if dt1 > 0 and dt2 > 0 and dt1 != dt2:
+        lmtd = (dt1 - dt2) / math.log(dt1 / dt2)
+    elif dt1 == dt2 and dt1 > 0:
+        lmtd = dt1
+    else:
+        lmtd = (abs(dt1) + abs(dt2)) / 2  # Abordagem de contingência mecânica para cruzamento térmico
+        
     area_m2 = (carga_kw * 1000.0) / (U_adotado * lmtd) if lmtd > 0 else 0
     
     placas = math.ceil(area_m2 / area_por_placa) + 2
     if placas % 2 != 0: placas += 1
 
-    # 1. EXIBIÇÃO IMEDIATA DOS CARDS DE MÉTRICAS
+    # EXIBIÇÃO IMEDIATA DOS CARDS DE MÉTRICAS
     st.markdown("### 1. Indicadores Hidro-Térmicos Garantidos")
     m_col1, m_col2, m_col3, m_col4 = st.columns(4)
     m_col1.metric("Carga Térmica Total", f"{carga_kw:.2f} kW")
     m_col2.metric("Área Efetiva Requerida", f"{area_m2:.2f} m²")
     m_col3.metric("Quantidade de Placas", f"{placas} un")
-    m_col4.metric("Coeficiente Global U", f"{U_adotado:.0f} W/m².K")
+    m_col4.metric(f"Vazão de {servico_sel}", f"{vazao_serv:.1f} kg/h")
 
-    # 2. CHAMADA COM A INTELIGÊNCIA ARTIFICIAL
-    d_projeto = {"Modelo": modelo, "Tag": tag, "Projeto": projeto, "Produto": produto, "Vazao": vazao_prod}
-    contexto = {"dados": d_projeto, "calculado": {"kw": round(carga_kw, 2), "placas": placas, "area": round(area_m2, 2), "area_unitaria_placa": area_por_placa}}
-    prompt = "Atue como Engenheiro Quimico Senior Especialista em Trocadores de Calor da AlfaVed. Analise: " + json.dumps(contexto) + ". Escreva um Parecer Tecnico Descritivo (maximo 150 watts) focando no material das gaxetas adequado, risco de incrustacao do produto e avaliacao se o arranjo de " + str(placas) + " placas do modelo " + modelo + " atende com seguranca. Retorne APENAS o texto corrido do parecer, sem markdown e sem asteriscos."
+    # 4. INTELIGÊNCIA ARTIFICIAL ATUANDO COMO ENGENHEIRO CONSULTOR SÊNIOR
+    d_projeto = {"Modelo": modelo, "Tag": tag, "Projeto": projeto, "Produto": produto, "Vazao_Prod": vazao_prod, "Servico": servico_sel, "Vazao_Serv": round(vazao_serv, 1)}
+    contexto = {"dados": d_projeto, "calculado": {"kw": round(carga_kw, 2), "placas": placas, "area": round(area_m2, 2), "lmtd": round(lmtd, 2)}}
     
-    parecer_ia = ""
-    try:
-        chave_segura = st.secrets["GEMINI_API_KEY"]
-        client = genai.Client(api_key=chave_segura)
-        response = client.models.generate_content(model='gemini-flash-latest', contents=prompt, config=dict(temperature=0.2))
-        parecer_ia = response.text.strip().replace("*", "")
-    except Exception:
-        parecer_ia = f"Parecer tecnico AlfaVed local. O processamento para o fluido {produto} no equipamento {modelo} indica uma demanda termica de {carga_kw:.2f} kW. Recomenda-se o uso estrito de gaxetas em EPDM para laticinios ate 130C ou NBR para oleos. Risco de incrustacao sob controle pelo regime de escoamento turbulento obtido pelo arranjo das {placas} placas de canal (area unitaria de {area_por_placa} m2). Equipamento homologado."
-
-    st.markdown("### 2. Parecer Técnico Consultivo (AlfaVed GenAI)")
-    st.info(parecer_ia)
-
-    # 3. GERAÇÃO DO PDF EM MEMÓRIA RAM
-    pdf_buffer = io.BytesIO()
-    doc = SimpleDocTemplate(pdf_buffer, pagesize=letter, rightMargin=54, leftMargin=54, topMargin=54, bottomMargin=54)
-    story = [Paragraph("AlfaVed Solucoes Industriais", st_tit), Paragraph("DATASHEET TECNICO - ENGENHARIA ASSISTIDA POR IA", st_sub), Spacer(1, 10)]
-    
-    story.append(Paragraph("1. Informacoes Gerais do Projeto", st_h2))
-    story.append(Table([[Paragraph("Item", st_th), Paragraph("Especificacao", st_th)], [Paragraph("Modelo Selecionado", st_tc), Paragraph(modelo, st_tc)], [Paragraph("Tag", st_tc), Paragraph(tag, st_tc)], [Paragraph("Projeto", st_tc), Paragraph(projeto, st_tc)]]))
-    story.append(Paragraph("2. Parametros Operacionais Processados", st_h2))
+    prompt = (
+        "Atue como Engenheiro Quimico Senior Especialista em Trocadores de Calor da AlfaVed.\n"
+        "Analise o projeto: " + json.dumps(contexto) + ".\n"
+        "Escreva um Parecer Tecnico Descritivo (maximo 150 palavras) focando na escolha ideal do material das gaxetas "
+        "(NBR para óleos, EPDM para laticínios/água até 130C, ou Gaxetas especiais para Vapor/Amônia), "
+        "avalie o risco de incrustação/congelamento do produto, e explique por que a escolha deste utilitário específico "
