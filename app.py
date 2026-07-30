@@ -105,6 +105,17 @@ class NumberedCanvas(canvas.Canvas):
             super().showPage()
         super().save()
 
+# --- FUNÇÃO ISOLADA DE SEGURANÇA PARA CHAMADA DA IA ---
+def consultar_gemini_com_seguranca(chave, prompt_texto, parecer_contingencia):
+    if not chave:
+        return parecer_contingencia
+    try:
+        client = genai.Client(api_key=chave)
+        response = client.models.generate_content(model='gemini-flash-latest', contents=prompt_texto, config=dict(temperature=0.2))
+        return response.text.strip().replace("*", "")
+    except Exception:
+        return parecer_contingencia
+
 # --- TOPBANE VISUAL CUSTOMIZADO ---
 st.markdown('<div class="main-hdr">▲ AlfaVed Soluções Industriais</div>', unsafe_allow_html=True)
 st.markdown('<div class="sub-hdr">Dashboard de Engenharia Térmica Avançada e Dimensionamento Hidrodinâmico</div>', unsafe_allow_html=True)
@@ -145,7 +156,6 @@ if disparar_calculo:
     cp_prod = dados_fluido["cp"]
     area_por_placa = dados_modelo["area_placa"]
     
-    # Ajuste de penalização do coeficiente U com base na viscosidade do produto
     fator_viscosidade = 1.0 if produto == "Agua" else (1.0 / math.isqrt(int(dados_fluido["viscosidade"])))
     U_adotado = dados_modelo["U_base"] * fator_viscosidade
     
@@ -184,12 +194,7 @@ if disparar_calculo:
     m_col3.metric("Quantidade de Placas", f"{placas} un")
     m_col4.metric(f"Vazão de {servico_sel}", f"{vazao_serv:.1f} kg/h")
 
-    # DEFINE PARECER TÉCNICO DE FORMA DIRETA E SEM ANINHAMENTOS (PREVENÇÃO TOTAL CONTRA CRASHES)
-    parecer_ia = f"Parecer tecnico AlfaVed. O processamento para {produto} utilizando {servico_sel} no equipamento {modelo} indica uma demanda termica rigorosa de {carga_kw:.2f} kW. Para operacoes com {servico_sel}, a engenharia especifica o arranjo de {placas} placas de canal. Recomenda-se o uso de gaxetas em EPDM para fluidos aquosos, Viton para vapor de alta temperatura ou elastomeros especiais para Amonia Anidra refrataria."
+    # PREPARAÇÃO DO PARECER E ACIONAMENTO DA FUNÇÃO PROTÉGIDA
+    parecer_padrao_local = f"Parecer tecnico AlfaVed. O processamento para {produto} utilizando {servico_sel} no equipamento {modelo} indica uma demanda termica de {carga_kw:.2f} kW. Para operacoes com {servico_sel}, a engenharia especifica o arranjo de {placas} placas de canal (area unitaria de {area_por_placa} m2). Recomenda-se o uso de gaxetas em EPDM para laticinios/agua ate 130C, Viton para vapor ou elastomeros especiais para Amonia Anidra."
     
-    # Injeta a chave com segurança apenas se existir no painel
-    chave_segura = st.secrets.get("GEMINI_API_KEY", "")
-    
-    if chave_segura != "":
-        # Bloco linear puro sem aninhamentos try/except complexos que quebram o interpretador 3.14
-        contexto_json = f'{{"modelo": "{modelo}", "produto": "{produto}", "carga_kw": {carga_kw:.1f}, "placas": {placas}, "servico": "{servico_sel}", "vazao_serv": {vazao_serv:.1f}}}'
+    contexto_json = f'{{"modelo": "{modelo}", "produto": "{produto}", "carga_kw": {carga_kw:.1f}, "placas": {placas}, "servico": "{servico_sel}", "vazao_serv": {vazao_serv:.1f}}}'
