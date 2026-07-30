@@ -7,7 +7,6 @@ import google.genai as genai
 # Configuração da página Web com layout expandido e responsivo
 st.set_page_config(page_title="AlfaVed Engenharia", page_icon="▲", layout="wide")
 
-# CORREÇÃO DE IMPORTAÇÃO: getSampleStyleSheet adicionada explicitamente
 from reportlab.lib.pagesizes import letter
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
@@ -62,7 +61,7 @@ BANCO_FLUIDOS = {
     "Oleo Vegetal": {"cp": 1.97, "viscosidade": 50.0}
 }
 
-# BANCO DE SERVIÇOS TÉRMICOS (MUDANÇA DE FASE E SENSÍVEL)
+# BANCO DE SERVIÇOS TÉRMICOS INDEXADO COM SUCESSO
 BANCO_SERVICOS = {
     "Agua Industrial": {"cp": 4.18, "latente": 0.0, "tipo": "sensivel"},
     "Glicol 20%": {"cp": 3.85, "latente": 0.0, "tipo": "sensivel"},
@@ -84,7 +83,6 @@ BANCO_MODELOS = {
     "Alfa Laval M15": {"area_placa": 0.61, "U_base": 4700}
 }
 
-# Indexação dos estilos do ReportLab corrigida
 styles_doc = getSampleStyleSheet()
 st_tit = ParagraphStyle('T1', parent=styles_doc['Heading1'], fontName='Helvetica-Bold', fontSize=22, textColor=colors.HexColor("#0d1b2a"))
 st_sub = ParagraphStyle('T2', parent=styles_doc['Normal'], fontName='Helvetica', fontSize=10, textColor=colors.HexColor("#d90429"), spaceAfter=15)
@@ -143,6 +141,7 @@ else:
     t_out_serv = st.sidebar.number_input("Temp. Saída Serviço (°C)", value=12.0)
 
 st.sidebar.markdown("---")
+# ORDEM CORRIGIDA: Botão agora fica posicionado após carregar todas as variáveis de utilitários
 disparar_calculo = st.sidebar.button("Executar Cálculo Térmico Rigoroso", type="primary")
 
 if disparar_calculo:
