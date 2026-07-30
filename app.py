@@ -2,7 +2,7 @@ import streamlit as st
 import json
 import math
 import io
-import google.genai as genai
+import google.generativeai as genai
 
 # Configuração da página Web com layout expandido e responsivo
 st.set_page_config(page_title="AlfaVed Engenharia", page_icon="▲", layout="wide")
@@ -48,7 +48,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# BANCO DE DADOS DE PRODUTOS/FLUIDOS (LADO QUENTE OU FRIO DE PROCESSO)
+# BANCO DE DADOS DE PRODUTOS/FLUIDOS
 BANCO_FLUIDOS = {
     "Agua": {"cp": 4.18, "viscosidade": 0.89},
     "Leite Integral": {"cp": 3.89, "viscosidade": 2.1},
@@ -105,17 +105,6 @@ class NumberedCanvas(canvas.Canvas):
             super().showPage()
         super().save()
 
-# --- FUNÇÃO ISOLADA DE SEGURANÇA PARA CHAMADA DA IA ---
-def consultar_gemini_com_seguranca(chave, prompt_texto, parecer_contingencia):
-    if not chave:
-        return parecer_contingencia
-    try:
-        client = genai.Client(api_key=chave)
-        response = client.models.generate_content(model='gemini-flash-latest', contents=prompt_texto, config=dict(temperature=0.2))
-        return response.text.strip().replace("*", "")
-    except Exception:
-        return parecer_contingencia
-
 # --- TOPBANE VISUAL CUSTOMIZADO ---
 st.markdown('<div class="main-hdr">▲ AlfaVed Soluções Industriais</div>', unsafe_allow_html=True)
 st.markdown('<div class="sub-hdr">Dashboard de Engenharia Térmica Avançada e Dimensionamento Hidrodinâmico</div>', unsafe_allow_html=True)
@@ -163,7 +152,7 @@ if disparar_calculo:
     dT_prod = abs(t_in_prod - t_out_prod)
     carga_kw = (vazao_prod * cp_prod * dT_prod) / 3600.0
     
-    # CÁLCULO RIGOROSO DO LADO DO SERVIÇO (Sensível vs Latente)
+    # CÁLCULO RIGOROSO DO LADO DO SERVIÇO
     if dados_serv_sel["tipo"] == "latente":
         vazao_serv = (carga_kw * 3600.0) / dados_serv_sel["latente"]
     else:
@@ -186,7 +175,7 @@ if disparar_calculo:
     placas = math.ceil(area_m2 / area_por_placa) + 2
     if placas % 2 != 0: placas += 1
 
-    # EXIBIÇÃO IMEDIATA DOS CARDS DE MÉTRICAS
+    # EXIBIÇÃO IMEDIATA DOS CARDS DE MÉTRICAS (GARANTIA DE EXIBIÇÃO ANTES DA IA)
     st.markdown("### 1. Indicadores Hidro-Térmicos Garantidos")
     m_col1, m_col2, m_col3, m_col4 = st.columns(4)
     m_col1.metric("Carga Térmica Total", f"{carga_kw:.2f} kW")
@@ -194,7 +183,14 @@ if disparar_calculo:
     m_col3.metric("Quantidade de Placas", f"{placas} un")
     m_col4.metric(f"Vazão de {servico_sel}", f"{vazao_serv:.1f} kg/h")
 
-    # PREPARAÇÃO DO PARECER E ACIONAMENTO DA FUNÇÃO PROTÉGIDA
-    parecer_padrao_local = f"Parecer tecnico AlfaVed. O processamento para {produto} utilizando {servico_sel} no equipamento {modelo} indica uma demanda termica de {carga_kw:.2f} kW. Para operacoes com {servico_sel}, a engenharia especifica o arranjo de {placas} placas de canal (area unitaria de {area_por_placa} m2). Recomenda-se o uso de gaxetas em EPDM para laticinios/agua ate 130C, Viton para vapor ou elastomeros especiais para Amonia Anidra."
+    # PARECER DE CONTINGÊNCIA IMEDIATO
+    parecer_ia = f"Parecer tecnico AlfaVed. O processamento para {produto} utilizando {servico_sel} no equipamento {modelo} indica uma demanda termica de {carga_kw:.2f} kW. Para operacoes com {servico_sel}, a engenharia especifica o arranjo de {placas} placas de canal (area unitaria de {area_por_placa} m2). Recomenda-se o uso de gaxetas em EPDM para fluidos aquosos, Viton para vapor de alta temperatura ou elastomeros especiais para Amonia Anidra."
     
-    contexto_json = f'{{"modelo": "{modelo}", "produto": "{produto}", "carga_kw": {carga_kw:.1f}, "placas": {placas}, "servico": "{servico_sel}", "vazao_serv": {vazao_serv:.1f}}}'
+    # CONSULTA COM A BIBLIOTECA LEGADA DA IA (PREVINE BLOQUEIOS DE TIMEOUT)
+    chave_segura = st.secrets.get("GEMINI_API_KEY", "")
+    if chave_segura != "":
+        try:
+            genai.configure(api_key=chave_segura)
+            contexto_json = f'{{"modelo": "{modelo}", "produto": "{produto}", "carga_kw": {carga_kw:.1f}, "placas": {placas}, "servico": "{servico_sel}", "vazao_serv": {vazao_serv:.1f}}}'
+            prompt_ia = f"Atue como Engenheiro Quimico Senior Especialista da AlfaVed. Analise os resultados: {contexto_json}. Escreva um Parecer Tecnico Descritivo (maximo 150 palavras) focando no material das gaxetas adequado (NBR, EPDM, ou gaxetas especiais para Vapor/Amonia), avalie o risco de incrustacao/congelamento do produto, e explique a vantagem deste utilitario específico no processo. Retorne APENAS o texto corrido, sem markdown e sem asteriscos."
+            
