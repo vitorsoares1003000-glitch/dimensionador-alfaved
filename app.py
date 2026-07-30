@@ -100,10 +100,26 @@ class NumberedCanvas(canvas.Canvas):
             self.setFont("Helvetica", 9)
             self.setFillColor(colors.HexColor("#666666"))
             self.drawString(54, 25, "AlfaVed Solucoes Industriais - Engenharia Termica")
-            largura_real = letter[0] if isinstance(letter, (list, tuple)) else letter
+            largura_real = letter if isinstance(letter, (list, tuple)) else letter
             self.drawRightString(largura_real - 54, 25, f"Pagina {self._pageNumber} de {num_pages}")
             super().showPage()
         super().save()
+
+# --- FUNÇÃO ISOLADA LINEAR PURA PARA CONSULTA DA IA (PROTEÇÃO TOTAL CONTRA FALHAS DE REDE) ---
+def chamar_ia_linear(chave, modelo_maq, prod_nome, kw, qtd_placas, serv_nome, vazao_util):
+    parecer_local = "Parecer tecnico AlfaVed. O processamento para o fluido " + str(prod_nome) + " no trocador " + str(modelo_maq) + " indica uma demanda termica de " + f"{kw:.2f}" + " kW. Recomenda-se o uso estrito de gaxetas em EPDM para fluidos alimenticios/agua ate 130C, Viton para vapor de alta temperatura ou elastomeros especificos para Amonia Anidra refrataria. Risco de incrustacao sob controle pelo regime de alta turbulencia obtido pelo arranjo das " + str(qtd_placas) + " placas de canal."
+    if chave == "":
+        return parecer_local
+    try:
+        genai.configure(api_key=chave)
+        prompt_ia = "Atue como Engenheiro Quimico Senior Especialista da AlfaVed. Escreva um Parecer Tecnico Descritivo corrido (maximo 150 palavras, sem asteriscos e sem markdown) com base nos resultados: Modelo: " + str(modelo_maq) + ", Produto: " + str(prod_nome) + ", Carga: " + f"{kw:.1f}" + " kW, Placas: " + str(qtd_placas) + ", Utilitario: " + str(serv_nome) + ", Vazao: " + f"{vazao_util:.1f}" + " kg/h. Foque em materiais de gaxetas adequados e incrustacao."
+        model = genai.GenerativeModel('gemini-pro')
+        response = model.generate_content(prompt_ia)
+        if response.text:
+            return response.text.strip().replace("*", "")
+    except Exception:
+        pass
+    return parecer_local
 
 # --- TOPBANE VISUAL CUSTOMIZADO ---
 st.markdown('<div class="main-hdr">▲ AlfaVed Soluções Industriais</div>', unsafe_allow_html=True)
@@ -175,22 +191,9 @@ if disparar_calculo:
     placas = math.ceil(area_m2 / area_por_placa) + 2
     if placas % 2 != 0: placas += 1
 
-    # EXIBIÇÃO IMEDIATA DOS CARDS DE MÉTRICAS (GARANTIA DE EXIBIÇÃO ANTES DA IA)
+    # EXIBIÇÃO IMEDIATA DOS CARDS DE MÉTRICAS
     st.markdown("### 1. Indicadores Hidro-Térmicos Garantidos")
     m_col1, m_col2, m_col3, m_col4 = st.columns(4)
     m_col1.metric("Carga Térmica Total", f"{carga_kw:.2f} kW")
     m_col2.metric("Área Efetiva Requerida", f"{area_m2:.2f} m²")
     m_col3.metric("Quantidade de Placas", f"{placas} un")
-    m_col4.metric(f"Vazão de {servico_sel}", f"{vazao_serv:.1f} kg/h")
-
-    # PARECER DE CONTINGÊNCIA IMEDIATO
-    parecer_ia = f"Parecer tecnico AlfaVed. O processamento para {produto} utilizando {servico_sel} no equipamento {modelo} indica uma demanda termica de {carga_kw:.2f} kW. Para operacoes com {servico_sel}, a engenharia especifica o arranjo de {placas} placas de canal (area unitaria de {area_por_placa} m2). Recomenda-se o uso de gaxetas em EPDM para fluidos aquosos, Viton para vapor de alta temperatura ou elastomeros especiais para Amonia Anidra."
-    
-    # CONSULTA COM A BIBLIOTECA LEGADA DA IA (PREVINE BLOQUEIOS DE TIMEOUT)
-    chave_segura = st.secrets.get("GEMINI_API_KEY", "")
-    if chave_segura != "":
-        try:
-            genai.configure(api_key=chave_segura)
-            contexto_json = f'{{"modelo": "{modelo}", "produto": "{produto}", "carga_kw": {carga_kw:.1f}, "placas": {placas}, "servico": "{servico_sel}", "vazao_serv": {vazao_serv:.1f}}}'
-            prompt_ia = f"Atue como Engenheiro Quimico Senior Especialista da AlfaVed. Analise os resultados: {contexto_json}. Escreva um Parecer Tecnico Descritivo (maximo 150 palavras) focando no material das gaxetas adequado (NBR, EPDM, ou gaxetas especiais para Vapor/Amonia), avalie o risco de incrustacao/congelamento do produto, e explique a vantagem deste utilitario específico no processo. Retorne APENAS o texto corrido, sem markdown e sem asteriscos."
-            
