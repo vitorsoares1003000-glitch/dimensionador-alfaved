@@ -1,16 +1,9 @@
 import streamlit as st
 import json
 import math
-import io
 
 # Configuração da página Web com layout expandido e responsivo
 st.set_page_config(page_title="AlfaVed Engenharia", page_icon="▲", layout="wide")
-
-from reportlab.lib.pagesizes import letter
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.lib import colors
-from reportlab.pdfgen import canvas
 
 # --- INJEÇÃO DE DESIGN E APARÊNCIA CUSTOMIZADA (CSS) ---
 st.markdown("""
@@ -31,19 +24,10 @@ st.markdown("""
             background-color: #d90429 !important;
             transform: scale(1.02) !important;
         }
-        div.stDownloadButton > button:first-child {
-            background-color: #2b7a78 !important;
-            color: white !important;
-            border-radius: 6px !important;
-            border: none !important;
-            padding: 12px 24px !important;
-            font-weight: bold !important;
-            width: 100% !important;
-        }
-        div.stDownloadButton > button:first-child:hover {
-            background-color: #17252a !important;
-        }
         div[data-testid="stMetricSimpleValue"] { font-size: 24px !important; font-weight: bold !important; color: #003049 !important; }
+        .datasheet-box { background-color: #ffffff; padding: 25px; border-radius: 8px; border: 1px solid #cccccc; margin-top: 20px; }
+        .datasheet-title { font-size: 20px; font-weight: bold; color: #0d1b2a; border-bottom: 2px solid #d90429; padding-bottom: 5px; margin-bottom: 15px; }
+        .datasheet-sec { font-size: 14px; font-weight: bold; color: #003049; margin-top: 15px; margin-bottom: 5px; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -76,33 +60,6 @@ BANCO_MODELOS = {
     "Alfa Laval TL10": {"area_placa": 0.46, "U_base": 4600},
     "Alfa Laval M15": {"area_placa": 0.61, "U_base": 4700}
 }
-
-styles_doc = getSampleStyleSheet()
-st_tit = ParagraphStyle('T1', parent=styles_doc['Heading1'], fontName='Helvetica-Bold', fontSize=22, textColor=colors.HexColor("#0d1b2a"))
-st_sub = ParagraphStyle('T2', parent=styles_doc['Normal'], fontName='Helvetica', fontSize=10, textColor=colors.HexColor("#d90429"), spaceAfter=15)
-st_h2 = ParagraphStyle('T3', parent=styles_doc['Heading2'], fontName='Helvetica-Bold', fontSize=12, textColor=colors.HexColor("#003049"), spaceBefore=10, spaceAfter=5)
-st_body = ParagraphStyle('T4', parent=styles_doc['Normal'], fontName='Helvetica', fontSize=9, textColor=colors.HexColor("#222222"), leading=12)
-st_th = ParagraphStyle('T5', parent=styles_doc['Normal'], fontName='Helvetica-Bold', fontSize=9, textColor=colors.white)
-st_tc = ParagraphStyle('T6', parent=styles_doc['Normal'], fontName='Helvetica', fontSize=9, textColor=colors.HexColor("#333333"))
-
-class NumberedCanvas(canvas.Canvas):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self._saved_page_states = []
-    def showPage(self):
-        self._saved_page_states.append(dict(self.__dict__))
-        self._startPage()
-    def save(self):
-        num_pages = len(self._saved_page_states)
-        for state in self._saved_page_states:
-            self.__dict__.update(state)
-            self.setFont("Helvetica", 9)
-            self.setFillColor(colors.HexColor("#666666"))
-            self.drawString(54, 25, "AlfaVed Solucoes Industriais - Engenharia Termica")
-            largura_real = letter if isinstance(letter, (list, tuple)) else letter
-            self.drawRightString(largura_real - 54, 25, f"Pagina {self._pageNumber} de {num_pages}")
-            super().showPage()
-        super().save()
 
 # --- TOPBANE VISUAL CUSTOMIZADO ---
 st.markdown('<div class="main-hdr">▲ AlfaVed Soluções Industriais</div>', unsafe_allow_html=True)
@@ -174,15 +131,15 @@ if disparar_calculo:
     placas = math.ceil(area_m2 / area_por_placa) + 2
     if placas % 2 != 0: placas += 1
 
-    # EXIBIÇÃO IMEDIATA DOS CARDS DE MÉTRICAS
-    st.markdown("### 1. Indicadores Hidro-Térmicos Garantidos")
+    # EXIBIÇÃO IMEDIATA DOS CARDS DE MÉTRICAS DO SOFTWARE
+    st.markdown("### 📊 Indicadores Hidro-Térmicos Garantidos")
     m_col1, m_col2, m_col3, m_col4 = st.columns(4)
     m_col1.metric("Carga Térmica Total", f"{carga_kw:.2f} kW")
     m_col2.metric("Área Efetiva Requerida", f"{area_m2:.2f} m²")
     m_col3.metric("Quantidade de Placas", f"{placas} un")
     m_col4.metric(f"Vazão de {servico_sel}", f"{vazao_serv:.1f} kg/h")
 
-    # --- BANCO DE REGRAS LOGICAS LOCAIS (SUBSTITUIÇÃO SÉNIOR DA IA) ---
+    # --- BANCO DE REGRAS LÓGICAS LOCAIS (REVISÃO DO PARECER SÊNIOR) ---
     gaxeta_material = "EPDM Standard"
     risco_incrustacao = "baixo devido ao regime de escoamento turbulento gerado pelas placas de canal."
     vantagem_utilidade = f"O uso de {servico_sel} confere alta estabilidade e controle preciso do delta T de processo."
@@ -190,12 +147,34 @@ if disparar_calculo:
     if servico_sel == "Vapor Saturado":
         gaxeta_material = "Viton de Alta Temperatura ou EPDM de Alta Densidade (HT)"
         risco_incrustacao = f"alto na parede das placas devido ao choque termico com o produto {produto}. Recomenda-se rotina de limpeza CIP frequente."
-        vantagem_utilidade = "O Vapor Saturado opera com altissimo coeficiente de transmissao termica latente, reduzindo drasticamente o tamanho e o custo do equipamento."
+        vantagem_utilidade = "O Vapor Saturado opera com altissimo coeficiente de transmissão térmica latente, reduzindo drasticamente o tamanho e o custo do equipamento."
     
     if servico_sel == "Amonia Anidra (R717)":
         gaxeta_material = "Neoprene Especial ou Cloroprene resistente a refrigerantes industriais"
-        risco_incrustacao = "baixo, contudo ha risco de congelamento localizado caso a temperatura de parede caia abaixo do ponto de fusao do produto."
-        vantagem_utilidade = "A Amonia Anidra aproveita a entalpia latente de evaporacao constante, ideal para processos de resfriamento rapido em laticinios e liofilizacao."
+        risco_incrustacao = "baixo, contudo há risco de congelamento localizado caso a temperatura de parede caia abaixo do ponto de fusão do produto."
+        vantagem_utilidade = "A Amônia Anidra aproveita a entalpia latente de evaporação constante, ideal para processos de resfriamento rápido em laticínios."
 
     if produto == "Oleo Vegetal":
-        gaxeta_material = "NBR Nitrilica Nitrilada (resistente a ataques de lipidios e hidrocarbonetos)"
+        gaxeta_material = "NBR Nitrílica Nitrilada (resistente a ataques de lipídios e hidrocarbonetos)"
+        risco_incrustacao = "moderado por deposição de gorduras viscosas frias. O arranjo exige velocidade de escoamento controlada."
+
+    parecer_ia = f"O dimensionamento para o fluido {produto} operando com o utilitário {servico_sel} no modelo {modelo} indica uma demanda térmica de {carga_kw:.2f} kW. Para conter esse processo com total estanqueidade, a engenharia especifica o uso de gaxetas em {gaxeta_material}. O risco de incrustação ou degradação do produto é classificado como {risco_incrustacao} {vantagem_utilidade} Arranjo final homologado com {placas} placas paralelas (área unitária de {area_por_placa} m²) e coeficiente global de {U_adotado:.0f} W/m².K."
+
+    # --- 📄 VISUALIZAÇÃO DIRETA DO DATASHEET CORPORATIVO NA TELA ---
+    st.markdown("---")
+    st.markdown('<div class="datasheet-box">', unsafe_allow_html=True)
+    st.markdown('<div class="datasheet-title">FOLHA DE DADOS TÉCNICOS - ALFAVED</div>', unsafe_allow_html=True)
+    
+    st.markdown('<div class="datasheet-sec">1. INFORMAÇÕES GERAIS DO PROJETO</div>', unsafe_allow_html=True)
+    st.write(f"**Modelo Selecionado:** {modelo} | **Tag do Equipamento:** {tag} | **Número do Projeto:** {projeto}")
+    
+    st.markdown('<div class="datasheet-sec">2. PARÂMETROS OPERACIONAIS DO PROCESSO</div>', unsafe_allow_html=True)
+    st.write(f"**Lado do Produto ({produto}):** Entrada {t_in_prod}°C -> Saída {t_out_prod}°C | Vazão: {vazao_prod} kg/h")
+    st.write(f"**Lado do Serviço ({servico_sel}):** Entrada {t_in_serv}°C -> Saída {t_out_serv}°C | Vazão Requerida: {vazao_serv:.1f} kg/h")
+    
+    st.markdown('<div class="datasheet-sec">3. RESULTADOS DO DIMENSIONAMENTO HIDRO-TÉRMICO</div>', unsafe_allow_html=True)
+    st.write(f"**Carga Térmica de Troca:** {carga_kw:.2f} kW | **Área Efetiva Requerida:** {area_m2:.2f} m²")
+    st.write(f"**Quantidade Final de Placas:** {placas} un | **Área por Placa Geometria:** {area_por_placa} m²")
+    st.write(f"**Média Logarítmica (LMTD):** {lmtd:.1f}°C | **Coeficiente de Troca Adotado (U):** {U_adotado:.0f} W/m².K")
+    
+    st.markdown('<div class="datasheet-sec">4. MEMORIAL DESCRITIVO E PARECER DA ENGENHARIA</div>', unsafe_allow_html=True)
