@@ -1,3 +1,2 @@
-streamlit
+gradio
 reportlab
-google-genai
