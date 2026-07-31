@@ -117,7 +117,6 @@ class NumberedCanvas(canvas.Canvas):
             self.setFont("Helvetica", 9)
             self.setFillColor(colors.HexColor("#666666"))
             self.drawString(54, 25, "AlfaVed Solucoes Industriais - Engenharia Termica")
-            # Correção da largura da página (pega o primeiro elemento da tupla letter)
             largura_real = letter[0] if isinstance(letter, (list, tuple)) else 612.0
             self.drawRightString(largura_real - 54, 25, f"Pagina {self._pageNumber} de {num_pages}")
             super().showPage()
