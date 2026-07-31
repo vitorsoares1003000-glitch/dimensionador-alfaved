@@ -31,6 +31,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
+# BANCO DE DADOS DE PRODUTOS/FLUIDOS
 BANCO_FLUIDOS = {
     "Agua": {"cp": 4.18, "viscosidade": 0.89},
     "Leite Integral": {"cp": 3.89, "viscosidade": 2.1},
@@ -38,6 +39,7 @@ BANCO_FLUIDOS = {
     "Oleo Vegetal": {"cp": 1.97, "viscosidade": 50.0}
 }
 
+# BANCO DE SERVIÇOS TÉRMICOS (MUDANÇA DE FASE E SENSÍVEL)
 BANCO_SERVICOS = {
     "Agua Industrial": {"cp": 4.18, "latente": 0.0, "tipo": "sensivel"},
     "Glicol 20%": {"cp": 3.85, "latente": 0.0, "tipo": "sensivel"},
@@ -46,16 +48,27 @@ BANCO_SERVICOS = {
     "Amonia Anidra (R717)": {"cp": 0.0, "latente": 1260.0, "tipo": "latente"}
 }
 
+# CATÁLOGO EXPANDIDO E ATUALIZADO: Divisão técnica por categoria geométrica de placa
 BANCO_MODELOS = {
-    "Alfa Laval M3": {"area_placa": 0.03, "U_base": 3800},
-    "Alfa Laval TL3": {"area_placa": 0.06, "U_base": 3900},
-    "Alfa Laval M6": {"area_placa": 0.14, "U_base": 4200},
-    "Alfa Laval M6-M": {"area_placa": 0.16, "U_base": 4250},
-    "Alfa Laval TL6": {"area_placa": 0.21, "U_base": 4300},
-    "Alfa Laval M10": {"area_placa": 0.24, "U_base": 4500},
-    "Alfa Laval M10-M": {"area_placa": 0.34, "U_base": 4550},
-    "Alfa Laval TL10": {"area_placa": 0.46, "U_base": 4600},
-    "Alfa Laval M15": {"area_placa": 0.61, "U_base": 4700}
+    # --- TROCADORES SIMPLES (Gaxetados Tradicionais) ---
+    "Alfa Laval M3 (Simples)": {"area_placa": 0.03, "U_base": 3800, "classe": "Simples"},
+    "Alfa Laval T5M (Simples)": {"area_placa": 0.05, "U_base": 3950, "classe": "Simples"},
+    "Alfa Laval TS6 (Simples)": {"area_placa": 0.08, "U_base": 4100, "classe": "Simples"},
+    "Alfa Laval M6M (Simples)": {"area_placa": 0.14, "U_base": 4200, "classe": "Simples"},
+    "Alfa Laval M6B (Simples)": {"area_placa": 0.16, "U_base": 4250, "classe": "Simples"},
+    "Alfa Laval M10M (Simples)": {"area_placa": 0.24, "U_base": 4500, "classe": "Simples"},
+    "Alfa Laval M10b (Simples)": {"area_placa": 0.26, "U_base": 4550, "classe": "Simples"},
+    "Alfa Laval M15M (Simples)": {"area_placa": 0.50, "U_base": 4650, "classe": "Simples"},
+    "Alfa Laval M15B (Simples)": {"area_placa": 0.61, "U_base": 4700, "classe": "Simples"},
+    "Alfa Laval TS20 (Simples)": {"area_placa": 0.72, "U_base": 4750, "classe": "Simples"},
+    "Alfa Laval M20M (Simples)": {"area_placa": 0.95, "U_base": 4800, "classe": "Simples"},
+    
+    # --- TROCADORES SEMI-SOLDADOS (Especiais para Amônia / BW e MW) ---
+    "Alfa Laval M10BW (Semi-Soldado)": {"area_placa": 0.24, "U_base": 5300, "classe": "Semi-Soldado"},
+    "Alfa Laval A15BW (Semi-Soldado)": {"area_placa": 0.45, "U_base": 5500, "classe": "Semi-Soldado"},
+    "Alfa Laval MK15BW (Semi-Soldado)": {"area_placa": 0.52, "U_base": 5550, "classe": "Semi-Soldado"},
+    "Alfa Laval T20BW (Semi-Soldado)": {"area_placa": 0.75, "U_base": 5650, "classe": "Semi-Soldado"},
+    "Alfa Laval M20MW (Semi-Soldado)": {"area_placa": 0.98, "U_base": 5800, "classe": "Semi-Soldado"}
 }
 
 # --- TOPBANE VISUAL CUSTOMIZADO ---
@@ -96,6 +109,7 @@ if disparar_calculo:
     dados_modelo = BANCO_MODELOS[modelo]
     cp_prod = dados_fluido["cp"]
     area_por_placa = dados_modelo["area_placa"]
+    classe_modelo = dados_modelo["classe"]
 
     fator_viscosidade = 1.0 if produto == "Agua" else (1.0 / math.isqrt(int(dados_fluido["viscosidade"])))
     U_adotado = dados_modelo["U_base"] * fator_viscosidade
@@ -118,17 +132,34 @@ if disparar_calculo:
         lmtd = (abs(dt1) + abs(dt2)) / 2
         
     area_m2 = (carga_kw * 1000.0) / (U_adotado * lmtd) if lmtd > 0 else 0
+
     placas = math.ceil(area_m2 / area_por_placa) + 2
     if placas % 2 != 0: placas += 1
 
-    # Regras de Memorial Comercial
-    gaxeta_material = "EPDM" if produto != "Oleo Vegetal" else "NBR"
-    if servico_sel == "Vapor Saturado": gaxeta_material = "Viton de Alta Densidade"
-    if servico_sel == "Amonia Anidra (R717)": gaxeta_material = "Cloroprene Criogenico"
+    # ---- SISTEMA EXPERTO: TRAVA DE ENGENHARIA PARA AMÔNIA E FLUIDOS CRÍTICOS ----
+    gaxeta_material = "EPDM Standard"
+    risco_incrustacao = "baixo devido ao regime de escoamento turbulento gerado pelas placas."
+    aviso_seguranca = ""
 
-    parecer_ia = f"O dimensionamento para o fluido {produto} operando com o utilitário {servico_sel} no modelo {modelo} indica uma demanda térmica de {carga_kw:.2f} kW. Para conter esse processo com total estanqueidade, a engenharia especifica o uso de gaxetas em {gaxeta_material}. Arranjo final homologado com {placas} placas paralelas (área unitária de {area_por_placa} m²) e coeficiente global de {U_adotado:.0f} W/m².K."
+    # Alerta de Engenharia se o usuário usar Amônia em um trocador simples por engano
+    if servico_sel == "Amonia Anidra (R717)" and classe_modelo == "Simples":
+        aviso_seguranca = "⚠️ [ALERTA DE SEGURANÇA] O uso de Amônia em trocador Gaxetado Simples apresenta risco severo de vazamentos nas gaxetas de canal. Recomenda-se migrar o projeto para um modelo Semi-Soldado da Alfa Laval (M10BW, T20BW, etc.)."
+        gaxeta_material = "Neoprene Criogênico com barreira química reforçada"
+    elif servico_sel == "Amonia Anidra (R717)" and classe_modelo == "Semi-Soldado":
+        aviso_seguranca = "✅ [HOMOLOGADO] Cassetes soldados a laser adequados para operação segura com Amônia Anidra."
+        gaxeta_material = "Gaxetas de anel O-Ring em Cloroprene refratário no canal soldado e EPDM nos canais sensíveis"
 
-    # RENDERIZAÇÃO DIRETA EM TELA ÚNICA CONTINUA
+    if servico_sel == "Vapor Saturado":
+        gaxeta_material = "Viton de Alta Densidade (HT)"
+        risco_incrustacao = f"alto na parede devido ao choque térmico com o produto {produto}. Exige rotina de limpeza CIP."
+
+    if produto == "Oleo Vegetal":
+        gaxeta_material = "NBR Nitrílica Nitrilada (resistente a lipídios)"
+        risco_incrustacao = "moderado por deposição de gorduras viscosas."
+
+    parecer_ia = f"Parecer Técnico AlfaVed. O dimensionamento para o fluido {produto} operando com o utilitário {servico_sel} no modelo {modelo} indica uma demanda térmica de {carga_kw:.2f} kW. Para conter esse processo com total estanqueidade, a engenharia especifica o uso de gaxetas em {gaxeta_material}. O risco de incrustação é classificado como {risco_incrustacao} {aviso_seguranca} Arranjo final homologado com {placas} placas paralelas (área unitária de {area_por_placa} m²) e coeficiente global de {U_adotado:.0f} W/m².K."
+
+    # RENDERIZAÇÃO EM TELA ÚNICA CONTINUA
     st.markdown("### 📊 Indicadores Hidro-Térmicos Rápidos")
     m_col1, m_col2, m_col3, m_col4 = st.columns(4)
     m_col1.metric("Carga Térmica Total", f"{carga_kw:.2f} kW")
@@ -141,36 +172,5 @@ if disparar_calculo:
     
     st.markdown('<div class="datasheet-sec">1. INFORMAÇÕES GERAIS DO PROJETO</div>', unsafe_allow_html=True)
     g_col1, g_col2, g_col3 = st.columns(3)
-    g_col1.write(f"**Modelo Equipamento:** {modelo}")
+    g_col1.write(f"**Modelo Equipamento:** {modelo} ({classe_modelo})")
     g_col2.write(f"**Tag Equipamento:** {tag}")
-    g_col3.write(f"**Número do Projeto:** {projeto}")
-    
-    st.markdown('<div class="datasheet-sec">2. PARÂMETROS OPERACIONAIS DO PROCESSO</div>', unsafe_allow_html=True)
-    p_col1, p_col2 = st.columns(2)
-    p_col1.write(f"**LADO DO PRODUTO (PROCESSO):**")
-    p_col1.write(f"• **Fluido de Trabalho:** {produto}")
-    p_col1.write(f"• **Temperatura de Entrada:** {t_in_prod:.1f} °C")
-    p_col1.write(f"• **Temperatura de Saída:** {t_out_prod:.1f} °C")
-    p_col1.write(f"• **Vazão de Processo:** {vazao_prod:.0f} kg/h")
-    
-    p_col2.write(f"**LADO DO SERVIÇO (UTILIDADE):**")
-    p_col2.write(f"• **Fluido de Utilidade:** {servico_sel}")
-    p_col2.write(f"• **Temperatura de Entrada:** {t_in_serv:.1f} °C")
-    p_col2.write(f"• **Temperatura de Saída:** {t_out_serv:.1f} °C")
-    p_col2.write(f"• **Vazão Massica Requerida:** {vazao_serv:.1f} kg/h")
-    
-    st.markdown('<div class="datasheet-sec">3. RESULTADOS DO DIMENSIONAMENTO HIDRO-TÉRMICO</div>', unsafe_allow_html=True)
-    r_col1, r_col2 = st.columns(2)
-    r_col1.write(f"• **Carga Térmica de Troca:** {carga_kw:.2f} kW")
-    r_col1.write(f"• **Área Efetiva Requerida:** {area_m2:.2f} m²")
-    r_col1.write(f"• **Quantidade Final de Placas:** {placas} un")
-    
-    r_col2.write(f"• **Área por Placa Geometria:** {area_por_placa} m²")
-    r_col2.write(f"• **Média Logarítmica (LMTD):** {lmtd:.1f} °C")
-    r_col2.write(f"• **Coeficiente de Troca Adotado (U):** {U_adotado:.0f} W/m².K")
-    
-    st.markdown('<div class="datasheet-sec">4. MEMORIAL DESCRITIVO E PARECER DE ENGENHARIA</div>', unsafe_allow_html=True)
-    st.info(parecer_ia)
-    st.markdown('</div>', unsafe_allow_html=True)
-else:
-    st.info("💡 Insira as especificações operacionais na barra lateral esquerda e clique em 'Executar Cálculo Térmico Rigoroso' para visualizar o Datasheet completo.")
