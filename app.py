@@ -94,6 +94,14 @@ ANGULOS_PLACA = {
     }
 }
 
+# Constantes de engenharia
+AREA_CANAL_DEFAULT = 0.0001  # m² - área transversal do canal
+VISCOSIDADE_CONVERSION = 0.001  # cP para Pa·s
+REYNOLDS_LAMINAR_LIMIT = 500
+REYNOLDS_TURBULENT_LIMIT = 2000
+TEMP_MIN_VALIDA = -50.0  # °C
+TEMP_MAX_VALIDA = 300.0  # °C
+
 styles_doc = getSampleStyleSheet()
 st_tit = ParagraphStyle('T1', parent=styles_doc['Heading1'], fontName='Helvetica-Bold', fontSize=22, textColor=colors.HexColor("#0d1b2a"))
 st_sub = ParagraphStyle('T2', parent=styles_doc['Normal'], fontName='Helvetica', fontSize=10, textColor=colors.HexColor("#d90429"), spaceAfter=15)
@@ -129,17 +137,17 @@ def calculate_reynolds(vazao_kg_h: float, viscosidade: float, densidade: float, 
     if vazao_kg_h <= 0 or viscosidade <= 0 or densidade <= 0:
         return 0
     vazao_m3_s = (vazao_kg_h / 3600.0) / densidade
-    area_canal = 0.0001
+    area_canal = AREA_CANAL_DEFAULT
     u = vazao_m3_s / area_canal
-    viscosidade_pa_s = viscosidade * 0.001
+    viscosidade_pa_s = viscosidade * VISCOSIDADE_CONVERSION
     reynolds = (densidade * u * dh) / viscosidade_pa_s
     return reynolds
 
 
 def classificar_turbulencia(reynolds: float) -> tuple:
-    if reynolds < 500:
+    if reynolds < REYNOLDS_LAMINAR_LIMIT:
         return ("Laminar", "Regime laminar - Transferência de calor limitada")
-    elif reynolds < 2000:
+    elif reynolds < REYNOLDS_TURBULENT_LIMIT:
         return ("Transicional", "Transição laminar-turbulento - Eficiência moderada")
     else:
         return ("Turbulento", "Regime turbulento - Ótima eficiência de transferência")
@@ -148,10 +156,10 @@ def classificar_turbulencia(reynolds: float) -> tuple:
 def recomendar_angulo_placa(reynolds_prod: float, reynolds_serv: float, pressao_max: float) -> tuple:
     reynolds_min = min(reynolds_prod, reynolds_serv)
     
-    if reynolds_min < 500:
+    if reynolds_min < REYNOLDS_LAMINAR_LIMIT:
         return ("45 HT", ANGULOS_PLACA["45 HT"]["multiplicador_u"],
                 "Reynolds baixo detectado. Placa 45 HT recomendada para máxima turbulência e eficiência térmica.")
-    elif reynolds_min > 2000:
+    elif reynolds_min > REYNOLDS_TURBULENT_LIMIT:
         return ("60 LT", ANGULOS_PLACA["60 LT"]["multiplicador_u"],
                 "Reynolds alto (turbulento). Placa 60 LT recomendada para melhor eficiência energética com menor queda de pressão.")
     else:
@@ -282,13 +290,31 @@ def generate_parecer_ia(modelo: str, tag: str, projeto: str, produto: str, servi
     )
 
     try:
-        chave_segura = st.secrets["GEMINI_API_KEY"]
+        chave_segura = st.secrets.get("GEMINI_API_KEY")
+        if not chave_segura:
+            raise ValueError("Chave API Gemini não configurada")
+        
         client = genai.Client(api_key=chave_segura)
-        response = client.models.generate_content(model='gemini-flash-latest', contents=prompt, config=dict(temperature=0.2))
+        response = client.models.generate_content(
+            model='gemini-1.5-flash', 
+            contents=prompt, 
+            config=dict(temperature=0.2)
+        )
         return response.text.strip().replace("*", "")
-    except Exception:
+    except KeyError:
         return (
             f"Parecer tecnico AlfaVed local. Processamento para {produto} em {modelo} ({tipo_modelo}) "
+            f"com servico {servico} indica demanda termica de {resultados['carga_kw']:.2f} kW. "
+            f"Reynolds Produto: {resultados['reynolds_prod']:.0f} ({resultados['regime_prod']}). "
+            f"Reynolds Servico: {resultados['reynolds_serv']:.0f} ({resultados['regime_serv']}). "
+            f"Placa recomendada: {resultados['tipo_placa']} - {resultados['justificativa_placa']} "
+            f"Gaxetas EPDM para laticinios ou NBR para oleos conforme compatibilidade. "
+            f"Arranjo de {resultados['placas']} placas com eficiência garantida. Equipamento homologado."
+        )
+    except Exception as e:
+        return (
+            f"Erro ao gerar parecer IA: {str(e)}. "
+            f"Processamento local para {produto} em {modelo} ({tipo_modelo}) "
             f"com servico {servico} indica demanda termica de {resultados['carga_kw']:.2f} kW. "
             f"Reynolds Produto: {resultados['reynolds_prod']:.0f} ({resultados['regime_prod']}). "
             f"Reynolds Servico: {resultados['reynolds_serv']:.0f} ({resultados['regime_serv']}). "
@@ -389,8 +415,6 @@ def build_pdf(modelo: str, tag: str, projeto: str, produto: str, servico: str, t
 
 
 def main() -> None:
-    st.set_page_config(page_title="AlfaVed Engenharia - Dimensionador", layout="wide")
-    
     # CSS personalizado
     st.markdown("""
     <style>
@@ -451,14 +475,14 @@ def main() -> None:
             
             # Seção Projeto
             st.markdown("#### 📌 Informações do Projeto")
-            tag = st.text_input("Tag do Equipamento", "TC-101", key="tag_input")
-            projeto = st.text_input("Número do Projeto", "PRJ-ALFAVED-2026", key="proj_input")
+            tag = st.text_input("Tag do Equipamento", "TC-101")
+            projeto = st.text_input("Número do Projeto", "PRJ-ALFAVED-2026")
             
             st.divider()
             
             # Seção Modelo
             st.markdown("#### ⚙️ Seleção do Modelo")
-            modelo = st.selectbox("Modelo Alfa Laval", list(BANCO_MODELOS.keys()), key="modelo_input")
+            modelo = st.selectbox("Modelo Alfa Laval", list(BANCO_MODELOS.keys()))
             tipo_modelo = BANCO_MODELOS[modelo]["tipo"].upper()
             st.caption(f"Tipo: **{tipo_modelo}** | Pressão Máx: **{BANCO_MODELOS[modelo]['pressao_max']} bar**")
             
@@ -468,27 +492,27 @@ def main() -> None:
             st.markdown("#### 🔴 Lado do Produto")
             col_prod1, col_prod2 = st.columns(2)
             with col_prod1:
-                produto = st.selectbox("Fluido do Produto", list(BANCO_FLUIDOS.keys()), key="prod_input")
+                produto = st.selectbox("Fluido do Produto", list(BANCO_FLUIDOS.keys()))
             with col_prod2:
-                vazao_prod = st.number_input("Vazão (kg/h)", value=5000.0, min_value=1.0, key="vazao_prod")
+                vazao_prod = st.number_input("Vazão (kg/h)", value=5000.0, min_value=1.0)
             
             col_temp_prod1, col_temp_prod2 = st.columns(2)
             with col_temp_prod1:
-                t_in_prod = st.number_input("Temp. Entrada (°C)", value=90.0, key="t_in_prod")
+                t_in_prod = st.number_input("Temp. Entrada (°C)", value=90.0)
             with col_temp_prod2:
-                t_out_prod = st.number_input("Temp. Saída (°C)", value=8.0, key="t_out_prod")
+                t_out_prod = st.number_input("Temp. Saída (°C)", value=8.0)
             
             st.divider()
             
             # Seção Serviço
             st.markdown("#### 🔵 Lado do Serviço")
-            servico = st.selectbox("Fluido de Serviço", list(BANCO_SERVICOS.keys()), key="serv_input")
+            servico = st.selectbox("Fluido de Serviço", list(BANCO_SERVICOS.keys()))
             
             col_temp_serv1, col_temp_serv2 = st.columns(2)
             with col_temp_serv1:
-                t_in_serv = st.number_input("Temp. Entrada (°C)", value=0.0, key="t_in_serv")
+                t_in_serv = st.number_input("Temp. Entrada (°C)", value=0.0)
             with col_temp_serv2:
-                t_out_serv = st.number_input("Temp. Saída (°C)", value=12.0, key="t_out_serv")
+                t_out_serv = st.number_input("Temp. Saída (°C)", value=12.0)
             
             st.divider()
             
@@ -498,6 +522,43 @@ def main() -> None:
         
         # ==================== PROCESSAMENTO E CÁLCULO ====================
         if submitted:
+            # Validação de entrada
+            try:
+                # Validar temperaturas
+                if not (TEMP_MIN_VALIDA <= t_in_prod <= TEMP_MAX_VALIDA):
+                    st.error(f"Temperatura de entrada do produto fora de faixa válida ({TEMP_MIN_VALIDA} a {TEMP_MAX_VALIDA}°C)")
+                    st.stop()
+                
+                if not (TEMP_MIN_VALIDA <= t_out_prod <= TEMP_MAX_VALIDA):
+                    st.error(f"Temperatura de saída do produto fora de faixa válida ({TEMP_MIN_VALIDA} a {TEMP_MAX_VALIDA}°C)")
+                    st.stop()
+                
+                if not (TEMP_MIN_VALIDA <= t_in_serv <= TEMP_MAX_VALIDA):
+                    st.error(f"Temperatura de entrada do serviço fora de faixa válida ({TEMP_MIN_VALIDA} a {TEMP_MAX_VALIDA}°C)")
+                    st.stop()
+                
+                if not (TEMP_MIN_VALIDA <= t_out_serv <= TEMP_MAX_VALIDA):
+                    st.error(f"Temperatura de saída do serviço fora de faixa válida ({TEMP_MIN_VALIDA} a {TEMP_MAX_VALIDA}°C)")
+                    st.stop()
+                
+                # Validar diferença de temperaturas
+                if abs(t_in_prod - t_out_prod) < 0.1:
+                    st.error("Temperaturas de entrada e saída do produto devem ser diferentes")
+                    st.stop()
+                
+                if abs(t_in_serv - t_out_serv) < 0.1:
+                    st.error("Temperaturas de entrada e saída do serviço devem ser diferentes")
+                    st.stop()
+                
+                # Validar vazão
+                if vazao_prod <= 0:
+                    st.error("Vazão do produto deve ser maior que zero")
+                    st.stop()
+                
+            except Exception as e:
+                st.error(f"Erro na validação: {str(e)}")
+                st.stop()
+            
             dados_fluido = BANCO_FLUIDOS[produto]
             dados_modelo = BANCO_MODELOS[modelo]
             dados_servico = BANCO_SERVICOS[servico]
@@ -508,26 +569,30 @@ def main() -> None:
                 vazao_prod, dados_servico
             )
             
-            # Armazenar resultados na sessão
-            st.session_state.resultados = resultados
-            st.session_state.modelo = modelo
-            st.session_state.tipo_modelo = tipo_modelo
-            st.session_state.tag = tag
-            st.session_state.projeto = projeto
-            st.session_state.produto = produto
-            st.session_state.servico = servico
-            st.session_state.t_in_prod = t_in_prod
-            st.session_state.t_out_prod = t_out_prod
-            st.session_state.t_in_serv = t_in_serv
-            st.session_state.t_out_serv = t_out_serv
-            st.session_state.vazao_prod = vazao_prod
-            
-            st.success("✅ Cálculo realizado com sucesso!")
+            # Armazenar resultados na sessão com prefixos para evitar conflito
+            try:
+                st.session_state.calc_resultados = resultados
+                st.session_state.calc_modelo = str(modelo)
+                st.session_state.calc_tipo_modelo = str(tipo_modelo)
+                st.session_state.calc_tag = str(tag)
+                st.session_state.calc_projeto = str(projeto)
+                st.session_state.calc_produto = str(produto)
+                st.session_state.calc_servico = str(servico)
+                st.session_state.calc_t_in_prod = float(t_in_prod)
+                st.session_state.calc_t_out_prod = float(t_out_prod)
+                st.session_state.calc_t_in_serv = float(t_in_serv)
+                st.session_state.calc_t_out_serv = float(t_out_serv)
+                st.session_state.calc_vazao_prod = float(vazao_prod)
+                
+                st.success("✅ Cálculo realizado com sucesso!")
+            except Exception as e:
+                st.error(f"Erro ao armazenar dados na sessão: {str(e)}")
+                st.stop()
     
     # ==================== COLUNA DE RESULTADOS ====================
     with result_col:
-        if 'resultados' in st.session_state:
-            resultados = st.session_state.resultados
+        if 'calc_resultados' in st.session_state:
+            resultados = st.session_state.calc_resultados
             
             st.markdown("### 📊 RESULTADOS DO DIMENSIONAMENTO")
             
@@ -607,18 +672,18 @@ def main() -> None:
             st.markdown("#### 📋 Documentação")
             
             parecer_ia = generate_parecer_ia(
-                st.session_state.modelo, st.session_state.tag, st.session_state.projeto,
-                st.session_state.produto, st.session_state.servico,
-                st.session_state.vazao_prod, resultados, st.session_state.tipo_modelo
+                st.session_state.calc_modelo, st.session_state.calc_tag, st.session_state.calc_projeto,
+                st.session_state.calc_produto, st.session_state.calc_servico,
+                st.session_state.calc_vazao_prod, resultados, st.session_state.calc_tipo_modelo
             )
             
             pdf_bytes = build_pdf(
-                st.session_state.modelo, st.session_state.tag, st.session_state.projeto,
-                st.session_state.produto, st.session_state.servico,
-                st.session_state.t_in_prod, st.session_state.t_out_prod,
-                st.session_state.t_in_serv, st.session_state.t_out_serv,
-                st.session_state.vazao_prod, resultados['vazao_serv'],
-                resultados, parecer_ia, st.session_state.tipo_modelo
+                st.session_state.calc_modelo, st.session_state.calc_tag, st.session_state.calc_projeto,
+                st.session_state.calc_produto, st.session_state.calc_servico,
+                st.session_state.calc_t_in_prod, st.session_state.calc_t_out_prod,
+                st.session_state.calc_t_in_serv, st.session_state.calc_t_out_serv,
+                st.session_state.calc_vazao_prod, resultados['vazao_serv'],
+                resultados, parecer_ia, st.session_state.calc_tipo_modelo
             )
             
             st.download_button(
