@@ -13,25 +13,65 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
 from reportlab.pdfgen import canvas
 
+# ==========================================
+# BANCO COMPLETO DE MODELOS ALFA LAVAL
+# ==========================================
+
+BANCO_MODELOS_GAXETADOS = {
+    "Alfa Laval M3 (Gaxetado)": {"tipo": "gaxetado", "area_placa": 0.03, "U_base": 3800, "pressao_max": 25, "temp_max": 120},
+    "Alfa Laval TL3 (Gaxetado)": {"tipo": "gaxetado", "area_placa": 0.06, "U_base": 3900, "pressao_max": 25, "temp_max": 120},
+    "Alfa Laval M6 (Gaxetado)": {"tipo": "gaxetado", "area_placa": 0.14, "U_base": 4200, "pressao_max": 25, "temp_max": 130},
+    "Alfa Laval M6-M (Gaxetado)": {"tipo": "gaxetado", "area_placa": 0.16, "U_base": 4250, "pressao_max": 30, "temp_max": 140},
+    "Alfa Laval TL6 (Gaxetado)": {"tipo": "gaxetado", "area_placa": 0.21, "U_base": 4300, "pressao_max": 30, "temp_max": 140},
+    "Alfa Laval M10 (Gaxetado)": {"tipo": "gaxetado", "area_placa": 0.24, "U_base": 4500, "pressao_max": 30, "temp_max": 160},
+    "Alfa Laval M10-M (Gaxetado)": {"tipo": "gaxetado", "area_placa": 0.34, "U_base": 4550, "pressao_max": 35, "temp_max": 170},
+    "Alfa Laval TL10 (Gaxetado)": {"tipo": "gaxetado", "area_placa": 0.46, "U_base": 4600, "pressao_max": 35, "temp_max": 170},
+    "Alfa Laval M15 (Gaxetado)": {"tipo": "gaxetado", "area_placa": 0.61, "U_base": 4700, "pressao_max": 35, "temp_max": 180},
+    "Alfa Laval M15-M (Gaxetado)": {"tipo": "gaxetado", "area_placa": 0.509, "U_base": 4700, "pressao_max": 35, "temp_max": 180},
+    "Alfa Laval T20B (Gaxetado)": {"tipo": "gaxetado", "area_placa": 0.46, "U_base": 4600, "pressao_max": 35, "temp_max": 180},
+    "Alfa Laval MA30 (Gaxetado)": {"tipo": "gaxetado", "area_placa": 0.80, "U_base": 4800, "pressao_max": 25, "temp_max": 210},
+    "Alfa Laval MA30S (Gaxetado)": {"tipo": "gaxetado", "area_placa": 0.85, "U_base": 4800, "pressao_max": 25, "temp_max": 210},
+    "Alfa Laval WideGap 350S (Gaxetado)": {"tipo": "gaxetado", "area_placa": 1.20, "U_base": 4900, "pressao_max": 25, "temp_max": 210},
+}
+
+BANCO_MODELOS_SEMI_SOLDADOS = {
+    "Alfa Laval M10BW (Semi-Soldado)": {"tipo": "semi-soldado", "area_placa": 0.24, "U_base": 4600, "pressao_max": 25, "temp_max": 150},
+    "Alfa Laval T20BW (Semi-Soldado)": {"tipo": "semi-soldado", "area_placa": 0.75, "U_base": 4900, "pressao_max": 40, "temp_max": 180},
+    "Alfa Laval M20MW (Semi-Soldado)": {"tipo": "semi-soldado", "area_placa": 0.95, "U_base": 4700, "pressao_max": 40, "temp_max": 180},
+    "Alfa Laval MK15BW (Semi-Soldado)": {"tipo": "semi-soldado", "area_placa": 0.58, "U_base": 4650, "pressao_max": 25, "temp_max": 150},
+    "Alfa Laval A15BW (Semi-Soldado)": {"tipo": "semi-soldado", "area_placa": 0.55, "U_base": 4600, "pressao_max": 30, "temp_max": 160},
+}
+
+BANCO_MODELOS = {**BANCO_MODELOS_GAXETADOS, **BANCO_MODELOS_SEMI_SOLDADOS}
+
 # BANCO DE DADOS DE PRODUTOS/FLUIDOS
 BANCO_FLUIDOS = {
     "Agua": {"cp": 4.18, "viscosidade": 0.89},
     "Leite Integral": {"cp": 3.89, "viscosidade": 2.1},
+    "Leite Desnatado": {"cp": 3.95, "viscosidade": 1.5},
     "Suco de Laranja": {"cp": 3.75, "viscosidade": 3.5},
-    "Oleo Vegetal": {"cp": 1.97, "viscosidade": 50.0}
+    "Suco de Maçã": {"cp": 3.70, "viscosidade": 2.8},
+    "Oleo Vegetal": {"cp": 1.97, "viscosidade": 50.0},
+    "Oleo Mineral": {"cp": 1.88, "viscosidade": 100.0},
+    "Melado": {"cp": 2.80, "viscosidade": 150.0},
+    "Cerveja": {"cp": 4.10, "viscosidade": 1.5},
+    "Vinho": {"cp": 3.85, "viscosidade": 1.2},
+    "Chocolate Quente": {"cp": 3.50, "viscosidade": 8.0}
 }
 
-# BANCO DE DADOS EXPANDIDO: Todas as principais placas Alfa Laval do mercado
-BANCO_MODELOS = {
-    "Alfa Laval M3": {"area_placa": 0.03, "U_base": 3800},
-    "Alfa Laval TL3": {"area_placa": 0.06, "U_base": 3900},
-    "Alfa Laval M6": {"area_placa": 0.14, "U_base": 4200},
-    "Alfa Laval M6-M": {"area_placa": 0.16, "U_base": 4250},
-    "Alfa Laval TL6": {"area_placa": 0.21, "U_base": 4300},
-    "Alfa Laval M10": {"area_placa": 0.24, "U_base": 4500},
-    "Alfa Laval M10-M": {"area_placa": 0.34, "U_base": 4550},
-    "Alfa Laval TL10": {"area_placa": 0.46, "U_base": 4600},
-    "Alfa Laval M15": {"area_placa": 0.61, "U_base": 4700}
+# BANCO DE FLUIDOS DE SERVIÇO (Resfriamento/Aquecimento)
+BANCO_SERVICOS = {
+    "Agua Fria": {"cp": 4.18, "viscosidade": 0.89},
+    "Agua Gelada": {"cp": 4.18, "viscosidade": 0.89},
+    "Agua Morna": {"cp": 4.18, "viscosidade": 0.65},
+    "Agua Quente": {"cp": 4.18, "viscosidade": 0.35},
+    "Vapor Saturado": {"cp": 2.0, "viscosidade": 0.015},
+    "Oleo Termico": {"cp": 2.50, "viscosidade": 5.0},
+    "Refrigerante R22": {"cp": 1.45, "viscosidade": 0.018},
+    "Refrigerante R410A": {"cp": 1.60, "viscosidade": 0.020},
+    "Refrigerante R134a": {"cp": 1.52, "viscosidade": 0.019},
+    "Amonia Liquida": {"cp": 4.70, "viscosidade": 0.25},
+    "Ar Comprimido": {"cp": 1.01, "viscosidade": 0.018}
 }
 
 styles_doc = getSampleStyleSheet()
@@ -85,8 +125,9 @@ def calculate_lmtd(dt1: float, dt2: float) -> float:
     return max(dt1_abs, dt2_abs, 1.0)
 
 
-def calculate_dimensionamento(produto: str, dados_fluido: dict, modelo: str, dados_modelo: dict, t_in_prod: float, t_out_prod: float, t_in_serv: float, t_out_serv: float, vazao_prod: float) -> dict:
+def calculate_dimensionamento(produto: str, dados_fluido: dict, modelo: str, dados_modelo: dict, t_in_prod: float, t_out_prod: float, t_in_serv: float, t_out_serv: float, vazao_prod: float, dados_servico: dict) -> dict:
     cp_prod = dados_fluido["cp"]
+    cp_serv = dados_servico["cp"]
     area_por_placa = dados_modelo["area_placa"]
     fator_viscosidade = get_viscosity_factor(dados_fluido)
     U_adotado = dados_modelo["U_base"] * fator_viscosidade
@@ -94,7 +135,7 @@ def calculate_dimensionamento(produto: str, dados_fluido: dict, modelo: str, dad
     dT_prod = abs(t_in_prod - t_out_prod)
     carga_kw = (vazao_prod * cp_prod * dT_prod) / 3600.0
     delta_t_serv = abs(t_out_serv - t_in_serv)
-    vazao_serv = (carga_kw * 3600.0) / (4.18 * delta_t_serv) if delta_t_serv > 0 else 0.0
+    vazao_serv = (carga_kw * 3600.0) / (cp_serv * delta_t_serv) if delta_t_serv > 0 else 0.0
 
     dt1 = t_in_prod - t_out_serv
     dt2 = t_out_prod - t_in_serv
@@ -117,13 +158,15 @@ def calculate_dimensionamento(produto: str, dados_fluido: dict, modelo: str, dad
     }
 
 
-def generate_parecer_ia(modelo: str, tag: str, projeto: str, produto: str, vazao_prod: float, resultados: dict) -> str:
+def generate_parecer_ia(modelo: str, tag: str, projeto: str, produto: str, servico: str, vazao_prod: float, resultados: dict, tipo_modelo: str) -> str:
     contexto = {
         "dados": {
             "Modelo": modelo,
+            "Tipo": tipo_modelo,
             "Tag": tag,
             "Projeto": projeto,
             "Produto": produto,
+            "Servico": servico,
             "Vazao": vazao_prod
         },
         "calculado": {
@@ -138,6 +181,7 @@ def generate_parecer_ia(modelo: str, tag: str, projeto: str, produto: str, vazao
         "Atue como Engenheiro Quimico Senior Especialista em Trocadores de Calor da AlfaVed. "
         "Analise: " + json.dumps(contexto) +
         ". Escreva um Parecer Tecnico Descritivo (maximo 150 palavras) focando no material das gaxetas adequado, "
+        "compatibilidade com " + produto + " e " + servico + ", "
         "risco de incrustacao do produto e avaliacao se o arranjo de " + str(resultados["placas"]) +
         " placas do modelo " + modelo + " atende com seguranca. Retorne APENAS o texto corrido do parecer, sem markdown e sem asteriscos."
     )
@@ -149,14 +193,15 @@ def generate_parecer_ia(modelo: str, tag: str, projeto: str, produto: str, vazao
         return response.text.strip().replace("*", "")
     except Exception:
         return (
-            f"Parecer tecnico AlfaVed local. O processamento para o fluido {produto} no equipamento {modelo} indica uma demanda termica "
-            f"de {resultados['carga_kw']:.2f} kW. Recomenda-se o uso estrito de gaxetas em EPDM para laticinios ate 130C ou NBR para oleos. "
+            f"Parecer tecnico AlfaVed local. O processamento para o fluido {produto} no equipamento {modelo} ({tipo_modelo}) "
+            f"com servico {servico} indica uma demanda termica de {resultados['carga_kw']:.2f} kW. "
+            f"Recomenda-se o uso estrito de gaxetas EPDM para laticinios ate 130C ou NBR para oleos. "
             f"Risco de incrustacao sob controle pelo regime de escoamento turbulento obtido pelo arranjo das {resultados['placas']} placas "
-            f"(area unitaria de {resultados['area_por_placa']} m2). Equipamento homologado."
+            f"(area unitaria de {resultados['area_por_placa']} m2). Equipamento homologado para a aplicacao."
         )
 
 
-def build_pdf(modelo: str, tag: str, projeto: str, produto: str, servico: str, t_in_prod: float, t_out_prod: float, t_in_serv: float, t_out_serv: float, vazao_prod: float, vazao_serv: float, resultados: dict, parecer_ia: str) -> bytes:
+def build_pdf(modelo: str, tag: str, projeto: str, produto: str, servico: str, t_in_prod: float, t_out_prod: float, t_in_serv: float, t_out_serv: float, vazao_prod: float, vazao_serv: float, resultados: dict, parecer_ia: str, tipo_modelo: str) -> bytes:
     pdf_buffer = io.BytesIO()
     doc = SimpleDocTemplate(pdf_buffer, pagesize=letter, rightMargin=54, leftMargin=54, topMargin=54, bottomMargin=54)
     story = [
@@ -170,6 +215,7 @@ def build_pdf(modelo: str, tag: str, projeto: str, produto: str, servico: str, t
         Table([
             [Paragraph("Item", st_th), Paragraph("Especificacao", st_th)],
             [Paragraph("Modelo Selecionado", st_tc), Paragraph(modelo, st_tc)],
+            [Paragraph("Tipo de Modelo", st_tc), Paragraph(tipo_modelo, st_tc)],
             [Paragraph("Tag", st_tc), Paragraph(tag, st_tc)],
             [Paragraph("Projeto", st_tc), Paragraph(projeto, st_tc)]
         ])
@@ -180,8 +226,8 @@ def build_pdf(modelo: str, tag: str, projeto: str, produto: str, servico: str, t
         Table([
             [Paragraph("Propriedade", st_th), Paragraph("Lado do Produto", st_th), Paragraph("Lado do Servico", st_th)],
             [Paragraph("Fluido", st_tc), Paragraph(produto, st_tc), Paragraph(servico, st_tc)],
-            [Paragraph("Temp Entrada", st_tc), Paragraph(f"{t_in_prod} C", st_tc), Paragraph(f"{t_in_serv} C", st_tc)],
-            [Paragraph("Temp Saida", st_tc), Paragraph(f"{t_out_prod} C", st_tc), Paragraph(f"{t_out_serv} C", st_tc)],
+            [Paragraph("Temp Entrada", st_tc), Paragraph(f"{t_in_prod} °C", st_tc), Paragraph(f"{t_in_serv} °C", st_tc)],
+            [Paragraph("Temp Saida", st_tc), Paragraph(f"{t_out_prod} °C", st_tc), Paragraph(f"{t_out_serv} °C", st_tc)],
             [Paragraph("Vazao Massica", st_tc), Paragraph(f"{vazao_prod} kg/h", st_tc), Paragraph(f"{vazao_serv:.1f} kg/h", st_tc)]
         ])
     )
@@ -191,10 +237,10 @@ def build_pdf(modelo: str, tag: str, projeto: str, produto: str, servico: str, t
         Table([
             [Paragraph("Grandeza de Engenharia", st_th), Paragraph("Valor Calculado Garantido", st_th)],
             [Paragraph("Carga Termica", st_tc), Paragraph(f"{resultados['carga_kw']:.2f} kW", st_tc)],
-            [Paragraph("Area Efetiva Requerida", st_tc), Paragraph(f"{resultados['area_m2']:.2f} m2", st_tc)],
+            [Paragraph("Area Efetiva Requerida", st_tc), Paragraph(f"{resultados['area_m2']:.2f} m²", st_tc)],
             [Paragraph("Quantidade de Placas Finais", st_tc), Paragraph(f"{resultados['placas']} placas", st_tc)],
-            [Paragraph("Area por Placa Geometria", st_tc), Paragraph(f"{resultados['area_por_placa']} m2", st_tc)],
-            [Paragraph("Coeficiente de Troca U", st_tc), Paragraph(f"{resultados['U_adotado']:.0f} W/m2.K", st_tc)]
+            [Paragraph("Area por Placa Geometria", st_tc), Paragraph(f"{resultados['area_por_placa']} m²", st_tc)],
+            [Paragraph("Coeficiente de Troca U", st_tc), Paragraph(f"{resultados['U_adotado']:.0f} W/m²K", st_tc)]
         ])
     )
 
@@ -225,6 +271,7 @@ def main() -> None:
     st.sidebar.header("Dados de Entrada do Projeto")
 
     modelo = st.sidebar.selectbox("Modelo do Equipamento (Alfa Laval)", list(BANCO_MODELOS.keys()))
+    tipo_modelo = BANCO_MODELOS[modelo]["tipo"].upper()
     tag = st.sidebar.text_input("Tag do Equipamento", "TC-101")
     projeto = st.sidebar.text_input("Número do Projeto", "PRJ-ALFAVED-2026")
 
@@ -237,13 +284,15 @@ def main() -> None:
 
     st.sidebar.markdown("---")
     st.sidebar.subheader("Lado do Serviço")
-    servico = st.sidebar.text_input("Fluido do Serviço", "Água", disabled=True)
+    servico = st.sidebar.selectbox("Fluido do Serviço", list(BANCO_SERVICOS.keys()))
     t_in_serv = st.sidebar.number_input("Temp. Entrada Serviço (°C)", value=0.0)
     t_out_serv = st.sidebar.number_input("Temp. Saída Serviço (°C)", value=12.0)
 
     if st.sidebar.button("Calcular e Gerar Parecer", type="primary"):
         dados_fluido = BANCO_FLUIDOS[produto]
         dados_modelo = BANCO_MODELOS[modelo]
+        dados_servico = BANCO_SERVICOS[servico]
+        
         resultados = calculate_dimensionamento(
             produto,
             dados_fluido,
@@ -254,14 +303,15 @@ def main() -> None:
             t_in_serv,
             t_out_serv,
             vazao_prod,
+            dados_servico
         )
 
         col1, col2, col3 = st.columns(3)
         col1.metric("Carga Térmica Estimada", f"{resultados['carga_kw']:.2f} kW")
         col2.metric("Área de Troca Requerida", f"{resultados['area_m2']:.2f} m²")
-        col3.metric("Quantidade de Placas (" + modelo.split()[-1] + ")", f"{resultados['placas']} placas")
+        col3.metric("Quantidade de Placas", f"{resultados['placas']} placas")
 
-        parecer_ia = generate_parecer_ia(modelo, tag, projeto, produto, vazao_prod, resultados)
+        parecer_ia = generate_parecer_ia(modelo, tag, projeto, produto, servico, vazao_prod, resultados, tipo_modelo)
         st.markdown("### Parecer Técnico e Memorial Descritivo (AlfaVed GenAI)")
         st.info(parecer_ia)
 
@@ -279,6 +329,7 @@ def main() -> None:
             resultados['vazao_serv'],
             resultados,
             parecer_ia,
+            tipo_modelo
         )
 
         st.download_button(
@@ -292,4 +343,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
