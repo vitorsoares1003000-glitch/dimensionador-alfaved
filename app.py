@@ -150,7 +150,7 @@ def calculate_dimensionamento(produto: str, dados_fluido: dict, modelo: str, dad
     regime_serv, desc_serv = classificar_turbulencia(reynolds_serv)
     tipo_placa, multiplicador_u, justificativa_angulo = recomendar_angulo_placa(reynolds_prod, reynolds_serv, pressao_max)
     fator_viscosidade = get_viscosity_factor(dados_fluido)
-    U_adotado = dados_modelo['U_base'] * Fator_viscosidade * multiplicador_u
+    U_adotado = dados_modelo['U_base'] * fator_viscosidade * multiplicador_u
     dt1, dt2 = t_in_prod - t_out_serv, t_out_prod - t_in_serv
     lmtd = calculate_lmtd(dt1, dt2)
     area_m2 = (carga_kw * 1000.0) / (U_adotado * lmtd) if lmtd > 0 else 0.0
