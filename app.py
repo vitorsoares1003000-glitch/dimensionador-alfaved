@@ -2,7 +2,6 @@ import streamlit as st
 import json
 import math
 import io
-import google.genai as genai
 
 # Configuração da página Web do Software AlfaVed
 st.set_page_config(page_title="AlfaVed Engenharia", page_icon="▲", layout="wide")
@@ -91,6 +90,25 @@ ANGULOS_PLACA = {
         "queda_pressao": "Baixa",
         "reynolds_min": 1500,
         "aplicacao": "Eficiência balanceada, vazões maiores, pressão crítica"
+    }
+}
+
+# ==========================================
+# CONTATOS - RESPONSÁVEIS TÉCNICOS
+# ==========================================
+
+CONTATOS_ALFAVED = {
+    "vitor_soares": {
+        "nome": "Vitor Soares",
+        "cargo": "Responsável do Projeto",
+        "email": "engeharia@alfaved.com.br",
+        "telefone": "(18) 99669-7330"
+    },
+    "jhonatan_dias": {
+        "nome": "Jhonatan Dias Dejato",
+        "cargo": "Diretor de Engenharia",
+        "email": "jhonatan@alfaved.com.br",
+        "telefone": "(18) 99628-8714"
     }
 }
 
@@ -249,82 +267,7 @@ def calculate_dimensionamento(produto: str, dados_fluido: dict, modelo: str, dad
     }
 
 
-def generate_parecer_ia(modelo: str, tag: str, projeto: str, produto: str, servico: str, vazao_prod: float, resultados: dict, tipo_modelo: str) -> str:
-    contexto = {
-        "dados": {
-            "Modelo": modelo,
-            "Tipo": tipo_modelo,
-            "Tag": tag,
-            "Projeto": projeto,
-            "Produto": produto,
-            "Servico": servico,
-            "Vazao": vazao_prod
-        },
-        "turbulencia": {
-            "Reynolds_Produto": round(resultados["reynolds_prod"], 0),
-            "Regime_Produto": resultados["regime_prod"],
-            "Reynolds_Servico": round(resultados["reynolds_serv"], 0),
-            "Regime_Servico": resultados["regime_serv"]
-        },
-        "configuracao_recomendada": {
-            "Tipo_Placa": resultados["tipo_placa"]
-        },
-        "calculado": {
-            "kw": round(resultados["carga_kw"], 2),
-            "placas": resultados["placas"],
-            "area": round(resultados["area_m2"], 2),
-            "area_unitaria_placa": resultados["area_por_placa"]
-        }
-    }
-
-    prompt = (
-        "Atue como Engenheiro Quimico Senior Especialista em Trocadores de Calor da AlfaVed. "
-        "Analise: " + json.dumps(contexto) +
-        ". Escreva um Parecer Tecnico Descritivo (maximo 180 palavras) focando em: "
-        "1) Material das gaxetas adequado para " + produto + " e " + servico + "; "
-        "2) Análise do regime de turbulência (Reynolds) para eficiência térmica; "
-        "3) Configuração recomendada com placa " + resultados["tipo_placa"] + "; "
-        "4) Risco de incrustação e avaliação se o arranjo de " + str(resultados["placas"]) +
-        " placas do modelo " + modelo + " atende com segurança. "
-        "Retorne APENAS o texto corrido do parecer, sem markdown e sem asteriscos."
-    )
-
-    try:
-        chave_segura = st.secrets.get("GEMINI_API_KEY")
-        if not chave_segura:
-            raise ValueError("Chave API Gemini não configurada")
-        
-        client = genai.Client(api_key=chave_segura)
-        response = client.models.generate_content(
-            model='gemini-1.5-flash', 
-            contents=prompt, 
-            config=dict(temperature=0.2)
-        )
-        return response.text.strip().replace("*", "")
-    except KeyError:
-        return (
-            f"Parecer tecnico AlfaVed local. Processamento para {produto} em {modelo} ({tipo_modelo}) "
-            f"com servico {servico} indica demanda termica de {resultados['carga_kw']:.2f} kW. "
-            f"Reynolds Produto: {resultados['reynolds_prod']:.0f} ({resultados['regime_prod']}). "
-            f"Reynolds Servico: {resultados['reynolds_serv']:.0f} ({resultados['regime_serv']}). "
-            f"Placa recomendada: {resultados['tipo_placa']} - {resultados['justificativa_placa']} "
-            f"Gaxetas EPDM para laticinios ou NBR para oleos conforme compatibilidade. "
-            f"Arranjo de {resultados['placas']} placas com eficiência garantida. Equipamento homologado."
-        )
-    except Exception as e:
-        return (
-            f"Erro ao gerar parecer IA: {str(e)}. "
-            f"Processamento local para {produto} em {modelo} ({tipo_modelo}) "
-            f"com servico {servico} indica demanda termica de {resultados['carga_kw']:.2f} kW. "
-            f"Reynolds Produto: {resultados['reynolds_prod']:.0f} ({resultados['regime_prod']}). "
-            f"Reynolds Servico: {resultados['reynolds_serv']:.0f} ({resultados['regime_serv']}). "
-            f"Placa recomendada: {resultados['tipo_placa']} - {resultados['justificativa_placa']} "
-            f"Gaxetas EPDM para laticinios ou NBR para oleos conforme compatibilidade. "
-            f"Arranjo de {resultados['placas']} placas com eficiência garantida. Equipamento homologado."
-        )
-
-
-def build_pdf(modelo: str, tag: str, projeto: str, produto: str, servico: str, t_in_prod: float, t_out_prod: float, t_in_serv: float, t_out_serv: float, vazao_prod: float, vazao_serv: float, resultados: dict, parecer_ia: str, tipo_modelo: str) -> bytes:
+def build_pdf(modelo: str, tag: str, projeto: str, produto: str, servico: str, t_in_prod: float, t_out_prod: float, t_in_serv: float, t_out_serv: float, vazao_prod: float, vazao_serv: float, resultados: dict, tipo_modelo: str) -> bytes:
     pdf_buffer = io.BytesIO()
     doc = SimpleDocTemplate(pdf_buffer, pagesize=letter, rightMargin=54, leftMargin=54, topMargin=54, bottomMargin=54)
     story = [
@@ -405,8 +348,22 @@ def build_pdf(modelo: str, tag: str, projeto: str, produto: str, servico: str, t
                 ])
             )
 
-    story.append(Paragraph("6. Parecer Técnico e Memorial Descritivo (AlfaVed GenAI)", st_h2))
-    story.append(Paragraph(parecer_ia, st_body))
+    story.append(Paragraph("6. Contatos Técnicos - AlfaVed Soluções Industriais", st_h2))
+    
+    # Tabela de contatos
+    story.append(
+        Table([
+            [Paragraph("Responsável", st_th), Paragraph("Cargo", st_th), Paragraph("Email", st_th), Paragraph("Telefone", st_th)],
+            [Paragraph(CONTATOS_ALFAVED["vitor_soares"]["nome"], st_tc), 
+             Paragraph(CONTATOS_ALFAVED["vitor_soares"]["cargo"], st_tc),
+             Paragraph(CONTATOS_ALFAVED["vitor_soares"]["email"], st_tc),
+             Paragraph(CONTATOS_ALFAVED["vitor_soares"]["telefone"], st_tc)],
+            [Paragraph(CONTATOS_ALFAVED["jhonatan_dias"]["nome"], st_tc),
+             Paragraph(CONTATOS_ALFAVED["jhonatan_dias"]["cargo"], st_tc),
+             Paragraph(CONTATOS_ALFAVED["jhonatan_dias"]["email"], st_tc),
+             Paragraph(CONTATOS_ALFAVED["jhonatan_dias"]["telefone"], st_tc)]
+        ])
+    )
 
     doc.build(story, canvasmaker=NumberedCanvas)
     pdf_data = pdf_buffer.getvalue()
@@ -668,14 +625,8 @@ def main() -> None:
             
             st.divider()
             
-            # Parecer IA e PDF
-            st.markdown("#### 📋 Documentação")
-            
-            parecer_ia = generate_parecer_ia(
-                st.session_state.calc_modelo, st.session_state.calc_tag, st.session_state.calc_projeto,
-                st.session_state.calc_produto, st.session_state.calc_servico,
-                st.session_state.calc_vazao_prod, resultados, st.session_state.calc_tipo_modelo
-            )
+            # Contatos e PDF
+            st.markdown("#### 📋 Documentação e Contatos")
             
             pdf_bytes = build_pdf(
                 st.session_state.calc_modelo, st.session_state.calc_tag, st.session_state.calc_projeto,
@@ -683,7 +634,7 @@ def main() -> None:
                 st.session_state.calc_t_in_prod, st.session_state.calc_t_out_prod,
                 st.session_state.calc_t_in_serv, st.session_state.calc_t_out_serv,
                 st.session_state.calc_vazao_prod, resultados['vazao_serv'],
-                resultados, parecer_ia, st.session_state.calc_tipo_modelo
+                resultados, st.session_state.calc_tipo_modelo
             )
             
             st.download_button(
@@ -694,13 +645,31 @@ def main() -> None:
                 use_container_width=True
             )
             
-            # Parecer expandível
-            with st.expander("📄 Ver Parecer Técnico Completo"):
+            # Seção de contatos
+            st.divider()
+            st.markdown("#### 👥 Contatos Técnicos - AlfaVed")
+            
+            contatos_col1, contatos_col2 = st.columns(2)
+            
+            with contatos_col1:
                 st.markdown(f"""
-                **Parecer Técnico - AlfaVed GenAI**
-                
-                {parecer_ia}
-                """)
+                <div class="section-card">
+                <h4>� {CONTATOS_ALFAVED['vitor_soares']['nome']}</h4>
+                <p><strong>Cargo:</strong> {CONTATOS_ALFAVED['vitor_soares']['cargo']}</p>
+                <p><strong>📧 Email:</strong> {CONTATOS_ALFAVED['vitor_soares']['email']}</p>
+                <p><strong>📱 Telefone:</strong> {CONTATOS_ALFAVED['vitor_soares']['telefone']}</p>
+                </div>
+                """, unsafe_allow_html=True)
+            
+            with contatos_col2:
+                st.markdown(f"""
+                <div class="section-card">
+                <h4>👤 {CONTATOS_ALFAVED['jhonatan_dias']['nome']}</h4>
+                <p><strong>Cargo:</strong> {CONTATOS_ALFAVED['jhonatan_dias']['cargo']}</p>
+                <p><strong>📧 Email:</strong> {CONTATOS_ALFAVED['jhonatan_dias']['email']}</p>
+                <p><strong>📱 Telefone:</strong> {CONTATOS_ALFAVED['jhonatan_dias']['telefone']}</p>
+                </div>
+                """, unsafe_allow_html=True)
         else:
             st.markdown("""
             <div class="section-card">
