@@ -439,27 +439,46 @@ def build_pdf(modelo: str, tag: str, projeto: str, produto: str, servico: str, t
     )
 
     story.append(Paragraph("5. Resultados do Dimensionamento Hidro-Termico", st_h2))
-    story.append(
-        Table([
-            [Paragraph("Grandeza de Engenharia", st_th), Paragraph("Valor Calculado", st_th)],
-            [Paragraph("Carga Termica", st_tc), Paragraph(f"{resultados['carga_kw']:.2f} kW", st_tc)],
-            [Paragraph("LMTD", st_tc), Paragraph(f"{resultados['lmtd']:.2f} °C", st_tc)],
-            [Paragraph("Coeficiente U Base", st_tc), Paragraph(f"{resultados['U_base']:.0f} W/m²K", st_tc)],
-            [Paragraph("Fator Viscosidade", st_tc), Paragraph(f"{resultados['fator_viscosidade']:.3f}", st_tc)],
-            [Paragraph("Multiplicador Placa", st_tc), Paragraph(f"{resultados['multiplicador_placa']:.2f}x", st_tc)],
-            [Paragraph("Fator Segurança", st_tc), Paragraph(f"{resultados['fator_seguranca']:.2f}x", st_tc)],
-            [Paragraph("Fator Fouling", st_tc), Paragraph(f"{COEFICIENTE_FOULING:.2f}x", st_tc)],
-            [Paragraph("Coeficiente U Adotado", st_tc), Paragraph(f"{resultados['U_adotado']:.0f} W/m²K", st_tc)],
-            [Paragraph("Area Teorica", st_tc), Paragraph(f"{resultados['area_teorica_m2']:.2f} m²", st_tc)],
-            [Paragraph("Area com Segurança", st_tc), Paragraph(f"{resultados['area_segura_m2']:.2f} m²", st_tc)],
-            [Paragraph("Area Efetiva", st_tc), Paragraph(f"{resultados['area_efetiva_m2']:.2f} m²", st_tc)],
-            [Paragraph("Folga Area", st_tc), Paragraph(f"{resultados['folga_area']:.1f}%", st_tc)],
-            [Paragraph("Area por Placa", st_tc), Paragraph(f"{resultados['area_por_placa']} m²", st_tc)],
-            [Paragraph("Placas Teoricas", st_tc), Paragraph(f"{resultados['placas_teoricas']:.1f}", st_tc)],
-            [Paragraph("Quantidade Placas", st_tc), Paragraph(f"{resultados['placas']} placas", st_tc)],
-            [Paragraph("Configuracao", st_tc), Paragraph(resultados['passes'], st_tc)]
-        ])
-    )
+    
+    # Construir tabela de forma compatível com versões antigas e novas
+    tabela_dados = [
+        [Paragraph("Grandeza de Engenharia", st_th), Paragraph("Valor Calculado", st_th)],
+        [Paragraph("Carga Termica", st_tc), Paragraph(f"{resultados['carga_kw']:.2f} kW", st_tc)],
+        [Paragraph("LMTD", st_tc), Paragraph(f"{resultados['lmtd']:.2f} °C", st_tc)],
+        [Paragraph("Coeficiente U Base", st_tc), Paragraph(f"{resultados['U_base']:.0f} W/m²K", st_tc)],
+        [Paragraph("Fator Viscosidade", st_tc), Paragraph(f"{resultados['fator_viscosidade']:.3f}", st_tc)],
+        [Paragraph("Multiplicador Placa", st_tc), Paragraph(f"{resultados['multiplicador_placa']:.2f}x", st_tc)],
+    ]
+    
+    # Adicionar campos novos se disponíveis
+    if 'fator_seguranca' in resultados:
+        tabela_dados.append([Paragraph("Fator Segurança", st_tc), Paragraph(f"{resultados['fator_seguranca']:.2f}x", st_tc)])
+        tabela_dados.append([Paragraph("Fator Fouling", st_tc), Paragraph(f"{COEFICIENTE_FOULING:.2f}x", st_tc)])
+    
+    tabela_dados.append([Paragraph("Coeficiente U Adotado", st_tc), Paragraph(f"{resultados['U_adotado']:.0f} W/m²K", st_tc)])
+    
+    # Adicionar campos de área se disponíveis (versão nova)
+    if 'area_teorica_m2' in resultados:
+        tabela_dados.append([Paragraph("Area Teorica", st_tc), Paragraph(f"{resultados['area_teorica_m2']:.2f} m²", st_tc)])
+        tabela_dados.append([Paragraph("Area com Segurança", st_tc), Paragraph(f"{resultados['area_segura_m2']:.2f} m²", st_tc)])
+        tabela_dados.append([Paragraph("Area Efetiva", st_tc), Paragraph(f"{resultados['area_efetiva_m2']:.2f} m²", st_tc)])
+        if 'folga_area' in resultados:
+            tabela_dados.append([Paragraph("Folga Area", st_tc), Paragraph(f"{resultados['folga_area']:.1f}%", st_tc)])
+    else:
+        # Versão antiga - apenas área única
+        tabela_dados.append([Paragraph("Area Efetiva Requerida", st_tc), Paragraph(f"{resultados['area_m2']:.2f} m²", st_tc)])
+    
+    tabela_dados.append([Paragraph("Area por Placa", st_tc), Paragraph(f"{resultados['area_por_placa']} m²", st_tc)])
+    
+    if 'placas_teoricas' in resultados:
+        tabela_dados.append([Paragraph("Placas Teoricas", st_tc), Paragraph(f"{resultados['placas_teoricas']:.1f}", st_tc)])
+    
+    tabela_dados.append([Paragraph("Quantidade Placas", st_tc), Paragraph(f"{resultados['placas']} placas", st_tc)])
+    
+    if 'passes' in resultados:
+        tabela_dados.append([Paragraph("Configuracao", st_tc), Paragraph(resultados['passes'], st_tc)])
+    
+    story.append(Table(tabela_dados))
 
     for item in story:
         if isinstance(item, Table):
@@ -687,20 +706,29 @@ def main() -> None:
             
             with kpi_col2:
                 st.markdown('<div class="metric-box">', unsafe_allow_html=True)
-                st.metric("Área Efetiva", f"{resultados['area_efetiva_m2']:.2f} m²")
-                st.caption(f"Teórica: {resultados['area_teorica_m2']:.2f} m²")
+                # Compatibilidade com versões antigas e novas
+                area_efetiva = resultados.get('area_efetiva_m2', resultados.get('area_m2', 0))
+                area_teorica = resultados.get('area_teorica_m2', area_efetiva)
+                st.metric("Área Efetiva", f"{area_efetiva:.2f} m²")
+                if 'area_teorica_m2' in resultados:
+                    st.caption(f"Teórica: {area_teorica:.2f} m²")
                 st.markdown('</div>', unsafe_allow_html=True)
             
             with kpi_col3:
                 st.markdown('<div class="metric-box">', unsafe_allow_html=True)
                 st.metric("Quantidade Placas", f"{resultados['placas']}")
-                st.caption(f"Teóricas: {resultados['placas_teoricas']:.1f}")
+                if 'placas_teoricas' in resultados:
+                    st.caption(f"Teóricas: {resultados['placas_teoricas']:.1f}")
                 st.markdown('</div>', unsafe_allow_html=True)
             
             with kpi_col4:
                 st.markdown('<div class="metric-box">', unsafe_allow_html=True)
-                st.metric("Folga Área", f"{resultados['folga_area']:.1f}%")
-                st.caption(f"Segurança: {resultados['fator_seguranca']:.0%}")
+                if 'folga_area' in resultados:
+                    st.metric("Folga Área", f"{resultados['folga_area']:.1f}%")
+                    if 'fator_seguranca' in resultados:
+                        st.caption(f"Segurança: {resultados['fator_seguranca']:.0%}")
+                else:
+                    st.metric("Placas", f"{resultados['placas']}")
                 st.markdown('</div>', unsafe_allow_html=True)
             
             st.divider()
@@ -759,40 +787,41 @@ def main() -> None:
             if resultados.get('aviso_limite'):
                 st.warning(resultados['aviso_limite'])
             
-            # Detalhes adicionais do dimensionamento
-            st.markdown("#### 📐 Detalhes do Dimensionamento")
-            
-            det_col1, det_col2, det_col3 = st.columns(3)
-            
-            with det_col1:
-                st.markdown(f"""
-                <div class="section-card">
-                <h5>Fatores Aplicados</h5>
-                <p><strong>Segurança:</strong> {resultados['fator_seguranca']:.2f}x</p>
-                <p><strong>Fouling:</strong> {COEFICIENTE_FOULING:.2f}x</p>
-                <p><strong>Placa:</strong> {resultados['fator_placa']:.2f}x</p>
-                </div>
-                """, unsafe_allow_html=True)
-            
-            with det_col2:
-                st.markdown(f"""
-                <div class="section-card">
-                <h5>Áreas Calculadas</h5>
-                <p><strong>Teórica:</strong> {resultados['area_teorica_m2']:.2f} m²</p>
-                <p><strong>c/ Segurança:</strong> {resultados['area_segura_m2']:.2f} m²</p>
-                <p><strong>Efetiva:</strong> {resultados['area_efetiva_m2']:.2f} m²</p>
-                </div>
-                """, unsafe_allow_html=True)
-            
-            with det_col3:
-                st.markdown(f"""
-                <div class="section-card">
-                <h5>Configuração</h5>
-                <p><strong>Placas:</strong> {resultados['placas']}</p>
-                <p><strong>Área/Placa:</strong> {resultados['area_por_placa']} m²</p>
-                <p><strong>Passes:</strong> {resultados['passes']}</p>
-                </div>
-                """, unsafe_allow_html=True)
+            # Detalhes adicionais do dimensionamento (apenas se dados novos estiverem disponíveis)
+            if all(key in resultados for key in ['fator_seguranca', 'fator_placa', 'area_teorica_m2', 'area_segura_m2', 'passes']):
+                st.markdown("#### 📐 Detalhes do Dimensionamento")
+                
+                det_col1, det_col2, det_col3 = st.columns(3)
+                
+                with det_col1:
+                    st.markdown(f"""
+                    <div class="section-card">
+                    <h5>Fatores Aplicados</h5>
+                    <p><strong>Segurança:</strong> {resultados['fator_seguranca']:.2f}x</p>
+                    <p><strong>Fouling:</strong> {COEFICIENTE_FOULING:.2f}x</p>
+                    <p><strong>Placa:</strong> {resultados['fator_placa']:.2f}x</p>
+                    </div>
+                    """, unsafe_allow_html=True)
+                
+                with det_col2:
+                    st.markdown(f"""
+                    <div class="section-card">
+                    <h5>Áreas Calculadas</h5>
+                    <p><strong>Teórica:</strong> {resultados['area_teorica_m2']:.2f} m²</p>
+                    <p><strong>c/ Segurança:</strong> {resultados['area_segura_m2']:.2f} m²</p>
+                    <p><strong>Efetiva:</strong> {resultados['area_efetiva_m2']:.2f} m²</p>
+                    </div>
+                    """, unsafe_allow_html=True)
+                
+                with det_col3:
+                    st.markdown(f"""
+                    <div class="section-card">
+                    <h5>Configuração</h5>
+                    <p><strong>Placas:</strong> {resultados['placas']}</p>
+                    <p><strong>Área/Placa:</strong> {resultados['area_por_placa']} m²</p>
+                    <p><strong>Passes:</strong> {resultados['passes']}</p>
+                    </div>
+                    """, unsafe_allow_html=True)
             
             st.divider()
             
