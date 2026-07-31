@@ -73,15 +73,27 @@ BANCO_SERVICOS = {
     "Ar Comprimido": {"cp": 1.01, "viscosidade": 0.018, "densidade": 1.2}
 }
 
-# CONFIGURAÇÃO DE ÂNGULOS DE PLACA - PADRÃO ALFA LAVAL
+# CONFIGURAÇÃO DE ÂNGULOS DE PLACA - PADRÃO ALFA LAVAL (EXPANDIDO)
 ANGULOS_PLACA = {
+    "30 H": {
+        "descricao": "30° High - Máxima Turbulência",
+        "multiplicador_u": 1.6,
+        "turbulencia": "Muito Alta",
+        "queda_pressao": "Muito Alta",
+        "reynolds_min": 0,
+        "reynolds_max": 800,
+        "fator_placas": 1.15,
+        "aplicacao": "Fluidos muito viscosos, baixas vazões, máxima transferência térmica necessária"
+    },
     "45 HT": {
         "descricao": "45° High Theta - Alta Eficiência Térmica",
         "multiplicador_u": 1.4,
         "turbulencia": "Alta",
         "queda_pressao": "Alta",
-        "reynolds_min": 0,
-        "aplicacao": "Máxima transferência térmica, vazões menores, pressão baixa aceitável"
+        "reynolds_min": 500,
+        "reynolds_max": 2000,
+        "fator_placas": 1.10,
+        "aplicacao": "Alta transferência térmica, vazões moderadas, pressão aceitável"
     },
     "60 LT": {
         "descricao": "60° Low Theta - Baixa Queda de Pressão",
@@ -89,7 +101,19 @@ ANGULOS_PLACA = {
         "turbulencia": "Moderada",
         "queda_pressao": "Baixa",
         "reynolds_min": 1500,
+        "reynolds_max": 5000,
+        "fator_placas": 1.05,
         "aplicacao": "Eficiência balanceada, vazões maiores, pressão crítica"
+    },
+    "70 L": {
+        "descricao": "70° Low - Mínima Queda de Pressão",
+        "multiplicador_u": 0.85,
+        "turbulencia": "Baixa",
+        "queda_pressao": "Muito Baixa",
+        "reynolds_min": 4000,
+        "reynolds_max": float('inf'),
+        "fator_placas": 1.20,
+        "aplicacao": "Altas vazões, restrição severa de queda de pressão, fluidos de baixa viscosidade"
     }
 }
 
@@ -119,6 +143,13 @@ REYNOLDS_LAMINAR_LIMIT = 500
 REYNOLDS_TURBULENT_LIMIT = 2000
 TEMP_MIN_VALIDA = -50.0  # °C
 TEMP_MAX_VALIDA = 300.0  # °C
+
+# Fatores de segurança e correções
+FATOR_SEGURANCA_AREA = 1.15  # 15% de margem de segurança na área
+PLACA_MINIMA = 10  # Número mínimo de placas
+PLACA_MAXIMA_GAXETADA = 200  # Limite prático para gaxetados
+PLACA_MAXIMA_SEMI_SOLDADO = 300  # Limite prático para semi-soldados
+COEFICIENTE_FOULING = 0.9  # Fator de incrustação padrão
 
 styles_doc = getSampleStyleSheet()
 st_tit = ParagraphStyle('T1', parent=styles_doc['Heading1'], fontName='Helvetica-Bold', fontSize=22, textColor=colors.HexColor("#0d1b2a"))
@@ -171,18 +202,60 @@ def classificar_turbulencia(reynolds: float) -> tuple:
         return ("Turbulento", "Regime turbulento - Ótima eficiência de transferência")
 
 
-def recomendar_angulo_placa(reynolds_prod: float, reynolds_serv: float, pressao_max: float) -> tuple:
+def recomendar_angulo_placa(reynolds_prod: float, reynolds_serv: float, pressao_max: float, viscosidade_prod: float, viscosidade_serv: float) -> tuple:
+    """
+    Recomendação avançada de ângulo de placa considerando:
+    - Número de Reynolds de ambos os lados
+    - Viscosidade dos fluidos
+    - Pressão máxima disponível
+    - Balanceamento entre eficiência térmica e queda de pressão
+    """
     reynolds_min = min(reynolds_prod, reynolds_serv)
+    reynolds_max = max(reynolds_prod, reynolds_serv)
+    viscosidade_max = max(viscosidade_prod, viscosidade_serv)
     
-    if reynolds_min < REYNOLDS_LAMINAR_LIMIT:
+    # Critério 1: Fluidos muito viscosos - usar ângulo mais agressivo
+    if viscosidade_max > 50.0:  # Fluidos com viscosidade > 50 cP
+        if reynolds_min < 1000:
+            return ("30 H", ANGULOS_PLACA["30 H"]["multiplicador_u"],
+                    f"Fluido muito viscoso ({viscosidade_max:.1f} cP) com Reynolds baixo. Placa 30 H recomendada para máxima turbulência e garantir transferência térmica adequada.")
+        else:
+            return ("45 HT", ANGULOS_PLACA["45 HT"]["multiplicador_u"],
+                    f"Fluido viscoso ({viscosidade_max:.1f} cP) com Reynolds moderado. Placa 45 HT recomendada para balancear eficiência e queda de pressão.")
+    
+    # Critério 2: Reynolds muito baixo - máxima turbulência necessária
+    if reynolds_min < 500:
+        return ("30 H", ANGULOS_PLACA["30 H"]["multiplicador_u"],
+                f"Reynolds muito baixo ({reynolds_min:.0f}). Placa 30 H recomendada para máxima turbulência e eficiência térmica.")
+    
+    # Critério 3: Reynolds baixo a moderado - alta eficiência
+    elif reynolds_min < 1500:
         return ("45 HT", ANGULOS_PLACA["45 HT"]["multiplicador_u"],
-                "Reynolds baixo detectado. Placa 45 HT recomendada para máxima turbulência e eficiência térmica.")
-    elif reynolds_min > REYNOLDS_TURBULENT_LIMIT:
+                f"Reynolds baixo/moderado ({reynolds_min:.0f}). Placa 45 HT recomendada para alta eficiência térmica com queda de pressão aceitável.")
+    
+    # Critério 4: Reynolds moderado a alto - balanceamento
+    elif reynolds_min < 4000:
+        # Considerar também o Reynolds máximo para evitar desperdício de energia
+        if reynolds_max > 8000 and pressao_max < 20:
+            return ("60 LT", ANGULOS_PLACA["60 LT"]["multiplicador_u"],
+                    f"Reynolds moderado ({reynolds_min:.0f}) com alto Reynolds no outro lado ({reynolds_max:.0f}). Placa 60 LT recomendada para eficiência energética.")
+        else:
+            return ("45 HT", ANGULOS_PLACA["45 HT"]["multiplicador_u"],
+                    f"Reynolds moderado ({reynolds_min:.0f}). Placa 45 HT recomendada para ótimo balanceamento entre eficiência e queda de pressão.")
+    
+    # Critério 5: Reynolds muito alto - minimizar queda de pressão
+    elif reynolds_min < 8000:
         return ("60 LT", ANGULOS_PLACA["60 LT"]["multiplicador_u"],
-                "Reynolds alto (turbulento). Placa 60 LT recomendada para melhor eficiência energética com menor queda de pressão.")
+                f"Reynolds alto ({reynolds_min:.0f}). Placa 60 LT recomendada para menor queda de pressão mantendo boa eficiência.")
+    
+    # Critério 6: Reynolds muito alto com restrição de pressão
     else:
-        return ("45 HT", ANGULOS_PLACA["45 HT"]["multiplicador_u"],
-                "Reynolds transicional. Placa 45 HT recomendada para otimizar transferência térmica.")
+        if pressao_max >= 30:
+            return ("60 LT", ANGULOS_PLACA["60 LT"]["multiplicador_u"],
+                    f"Reynolds muito alto ({reynolds_min:.0f}). Placa 60 LT recomendada para eficiência energética com boa margem de pressão.")
+        else:
+            return ("70 L", ANGULOS_PLACA["70 L"]["multiplicador_u"],
+                    f"Reynolds muito alto ({reynolds_min:.0f}) com restrição de pressão ({pressao_max} bar). Placa 70 L recomendada para mínima queda de pressão.")
 
 
 def get_viscosity_factor(dados_fluido: dict) -> float:
@@ -216,6 +289,7 @@ def calculate_dimensionamento(produto: str, dados_fluido: dict, modelo: str, dad
     area_por_placa = dados_modelo["area_placa"]
     pressao_max = dados_modelo.get("pressao_max", 25)
     dh = dados_modelo.get("dh", 0.005)
+    tipo_modelo = dados_modelo.get("tipo", "gaxetado")
     
     reynolds_prod = calculate_reynolds(vazao_prod, viscosidade_prod, densidade_prod, dh)
     
@@ -229,33 +303,75 @@ def calculate_dimensionamento(produto: str, dados_fluido: dict, modelo: str, dad
     regime_prod, desc_prod = classificar_turbulencia(reynolds_prod)
     regime_serv, desc_serv = classificar_turbulencia(reynolds_serv)
     
-    tipo_placa, multiplicador_u, justificativa_angulo = recomendar_angulo_placa(reynolds_prod, reynolds_serv, pressao_max)
+    # Recomendação aprimorada de ângulo considerando viscosidade
+    tipo_placa, multiplicador_u, justificativa_angulo = recomendar_angulo_placa(
+        reynolds_prod, reynolds_serv, pressao_max, viscosidade_prod, viscosidade_serv
+    )
     
     fator_viscosidade = get_viscosity_factor(dados_fluido)
     
-    U_adotado = dados_modelo["U_base"] * fator_viscosidade * multiplicador_u
+    # Aplicar fator de fouling (incrustação)
+    U_adotado = dados_modelo["U_base"] * fator_viscosidade * multiplicador_u * COEFICIENTE_FOULING
     
     dt1 = t_in_prod - t_out_serv
     dt2 = t_out_prod - t_in_serv
     lmtd = calculate_lmtd(dt1, dt2)
     
-    area_m2 = (carga_kw * 1000.0) / (U_adotado * lmtd) if lmtd > 0 else 0.0
+    # Área teórica requerida
+    area_teorica_m2 = (carga_kw * 1000.0) / (U_adotado * lmtd) if lmtd > 0 else 0.0
     
-    placas = math.ceil(area_m2 / area_por_placa) + 2
+    # Aplicar fator de segurança e fator específico do ângulo de placa
+    fator_placa = ANGULOS_PLACA[tipo_placa]["fator_placas"]
+    area_segura_m2 = area_teorica_m2 * FATOR_SEGURANCA_AREA * fator_placa
+    
+    # Cálculo inicial de placas
+    placas_teoricas = area_segura_m2 / area_por_placa
+    
+    # Arredondar para cima e adicionar placas de extremidade
+    placas = math.ceil(placas_teoricas) + 2
+    
+    # Garantir número mínimo de placas
+    if placas < PLACA_MINIMA:
+        placas = PLACA_MINIMA
+    
+    # Ajustar para número par (configuração padrão)
     if placas % 2 != 0:
         placas += 1
+    
+    # Verificar limites práticos por tipo de modelo
+    limite_max = PLACA_MAXIMA_GAXETADA if tipo_modelo == "gaxetado" else PLACA_MAXIMA_SEMI_SOLDADO
+    if placas > limite_max:
+        aviso_limite = f"⚠️ Quantidade de placas ({placas}) excede limite prático para {tipo_modelo} ({limite_max}). Considere modelo maior."
+        placas = limite_max
+    else:
+        aviso_limite = None
+    
+    # Cálculo da área efetiva com as placas selecionadas
+    area_efetiva_m2 = (placas - 2) * area_por_placa  # -2 para placas de extremidade
+    folga_area = ((area_efetiva_m2 - area_teorica_m2) / area_teorica_m2 * 100) if area_teorica_m2 > 0 else 0
+    
+    # Número de passes (simplificado - assume contra-corrente)
+    passes = "Contra-corrente"
     
     return {
         "carga_kw": carga_kw,
         "vazao_serv": vazao_serv,
         "lmtd": lmtd,
-        "area_m2": area_m2,
+        "area_teorica_m2": area_teorica_m2,
+        "area_segura_m2": area_segura_m2,
+        "area_efetiva_m2": area_efetiva_m2,
+        "area_m2": area_efetiva_m2,  # Mantido para compatibilidade
         "placas": placas,
+        "placas_teoricas": placas_teoricas,
         "area_por_placa": area_por_placa,
+        "folga_area": folga_area,
+        "passes": passes,
         "U_adotado": U_adotado,
         "U_base": dados_modelo["U_base"],
         "fator_viscosidade": fator_viscosidade,
         "multiplicador_placa": multiplicador_u,
+        "fator_seguranca": FATOR_SEGURANCA_AREA,
+        "fator_placa": fator_placa,
         "reynolds_prod": reynolds_prod,
         "reynolds_serv": reynolds_serv,
         "regime_prod": regime_prod,
@@ -263,7 +379,8 @@ def calculate_dimensionamento(produto: str, dados_fluido: dict, modelo: str, dad
         "desc_prod": desc_prod,
         "desc_serv": desc_serv,
         "tipo_placa": tipo_placa,
-        "justificativa_placa": justificativa_angulo
+        "justificativa_placa": justificativa_angulo,
+        "aviso_limite": aviso_limite
     }
 
 
@@ -330,10 +447,17 @@ def build_pdf(modelo: str, tag: str, projeto: str, produto: str, servico: str, t
             [Paragraph("Coeficiente U Base", st_tc), Paragraph(f"{resultados['U_base']:.0f} W/m²K", st_tc)],
             [Paragraph("Fator Viscosidade", st_tc), Paragraph(f"{resultados['fator_viscosidade']:.3f}", st_tc)],
             [Paragraph("Multiplicador Placa", st_tc), Paragraph(f"{resultados['multiplicador_placa']:.2f}x", st_tc)],
+            [Paragraph("Fator Segurança", st_tc), Paragraph(f"{resultados['fator_seguranca']:.2f}x", st_tc)],
+            [Paragraph("Fator Fouling", st_tc), Paragraph(f"{COEFICIENTE_FOULING:.2f}x", st_tc)],
             [Paragraph("Coeficiente U Adotado", st_tc), Paragraph(f"{resultados['U_adotado']:.0f} W/m²K", st_tc)],
-            [Paragraph("Area Efetiva Requerida", st_tc), Paragraph(f"{resultados['area_m2']:.2f} m²", st_tc)],
+            [Paragraph("Area Teorica", st_tc), Paragraph(f"{resultados['area_teorica_m2']:.2f} m²", st_tc)],
+            [Paragraph("Area com Segurança", st_tc), Paragraph(f"{resultados['area_segura_m2']:.2f} m²", st_tc)],
+            [Paragraph("Area Efetiva", st_tc), Paragraph(f"{resultados['area_efetiva_m2']:.2f} m²", st_tc)],
+            [Paragraph("Folga Area", st_tc), Paragraph(f"{resultados['folga_area']:.1f}%", st_tc)],
             [Paragraph("Area por Placa", st_tc), Paragraph(f"{resultados['area_por_placa']} m²", st_tc)],
-            [Paragraph("Quantidade de Placas", st_tc), Paragraph(f"{resultados['placas']} placas", st_tc)]
+            [Paragraph("Placas Teoricas", st_tc), Paragraph(f"{resultados['placas_teoricas']:.1f}", st_tc)],
+            [Paragraph("Quantidade Placas", st_tc), Paragraph(f"{resultados['placas']} placas", st_tc)],
+            [Paragraph("Configuracao", st_tc), Paragraph(resultados['passes'], st_tc)]
         ])
     )
 
@@ -554,7 +678,7 @@ def main() -> None:
             st.markdown("### 📊 RESULTADOS DO DIMENSIONAMENTO")
             
             # KPIs principais
-            kpi_col1, kpi_col2, kpi_col3 = st.columns(3)
+            kpi_col1, kpi_col2, kpi_col3, kpi_col4 = st.columns(4)
             
             with kpi_col1:
                 st.markdown('<div class="metric-box">', unsafe_allow_html=True)
@@ -563,12 +687,20 @@ def main() -> None:
             
             with kpi_col2:
                 st.markdown('<div class="metric-box">', unsafe_allow_html=True)
-                st.metric("Área Requerida", f"{resultados['area_m2']:.2f} m²")
+                st.metric("Área Efetiva", f"{resultados['area_efetiva_m2']:.2f} m²")
+                st.caption(f"Teórica: {resultados['area_teorica_m2']:.2f} m²")
                 st.markdown('</div>', unsafe_allow_html=True)
             
             with kpi_col3:
                 st.markdown('<div class="metric-box">', unsafe_allow_html=True)
                 st.metric("Quantidade Placas", f"{resultados['placas']}")
+                st.caption(f"Teóricas: {resultados['placas_teoricas']:.1f}")
+                st.markdown('</div>', unsafe_allow_html=True)
+            
+            with kpi_col4:
+                st.markdown('<div class="metric-box">', unsafe_allow_html=True)
+                st.metric("Folga Área", f"{resultados['folga_area']:.1f}%")
+                st.caption(f"Segurança: {resultados['fator_seguranca']:.0%}")
                 st.markdown('</div>', unsafe_allow_html=True)
             
             st.divider()
@@ -623,6 +755,45 @@ def main() -> None:
             
             st.info(f"💡 {resultados['justificativa_placa']}")
             
+            # Mostrar aviso se houver limite de placas
+            if resultados.get('aviso_limite'):
+                st.warning(resultados['aviso_limite'])
+            
+            # Detalhes adicionais do dimensionamento
+            st.markdown("#### 📐 Detalhes do Dimensionamento")
+            
+            det_col1, det_col2, det_col3 = st.columns(3)
+            
+            with det_col1:
+                st.markdown(f"""
+                <div class="section-card">
+                <h5>Fatores Aplicados</h5>
+                <p><strong>Segurança:</strong> {resultados['fator_seguranca']:.2f}x</p>
+                <p><strong>Fouling:</strong> {COEFICIENTE_FOULING:.2f}x</p>
+                <p><strong>Placa:</strong> {resultados['fator_placa']:.2f}x</p>
+                </div>
+                """, unsafe_allow_html=True)
+            
+            with det_col2:
+                st.markdown(f"""
+                <div class="section-card">
+                <h5>Áreas Calculadas</h5>
+                <p><strong>Teórica:</strong> {resultados['area_teorica_m2']:.2f} m²</p>
+                <p><strong>c/ Segurança:</strong> {resultados['area_segura_m2']:.2f} m²</p>
+                <p><strong>Efetiva:</strong> {resultados['area_efetiva_m2']:.2f} m²</p>
+                </div>
+                """, unsafe_allow_html=True)
+            
+            with det_col3:
+                st.markdown(f"""
+                <div class="section-card">
+                <h5>Configuração</h5>
+                <p><strong>Placas:</strong> {resultados['placas']}</p>
+                <p><strong>Área/Placa:</strong> {resultados['area_por_placa']} m²</p>
+                <p><strong>Passes:</strong> {resultados['passes']}</p>
+                </div>
+                """, unsafe_allow_html=True)
+            
             st.divider()
             
             # Contatos e PDF
@@ -654,7 +825,7 @@ def main() -> None:
             with contatos_col1:
                 st.markdown(f"""
                 <div class="section-card">
-                <h4>� {CONTATOS_ALFAVED['vitor_soares']['nome']}</h4>
+                <h4>👤 {CONTATOS_ALFAVED['vitor_soares']['nome']}</h4>
                 <p><strong>Cargo:</strong> {CONTATOS_ALFAVED['vitor_soares']['cargo']}</p>
                 <p><strong>📧 Email:</strong> {CONTATOS_ALFAVED['vitor_soares']['email']}</p>
                 <p><strong>📱 Telefone:</strong> {CONTATOS_ALFAVED['vitor_soares']['telefone']}</p>
