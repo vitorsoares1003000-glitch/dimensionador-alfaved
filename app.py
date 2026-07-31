@@ -31,7 +31,6 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# BANCO DE DADOS DE PRODUTOS/FLUIDOS
 BANCO_FLUIDOS = {
     "Agua": {"cp": 4.18, "viscosidade": 0.89},
     "Leite Integral": {"cp": 3.89, "viscosidade": 2.1},
@@ -39,7 +38,6 @@ BANCO_FLUIDOS = {
     "Oleo Vegetal": {"cp": 1.97, "viscosidade": 50.0}
 }
 
-# BANCO DE SERVIÇOS TÉRMICOS (MUDANÇA DE FASE E SENSÍVEL)
 BANCO_SERVICOS = {
     "Agua Industrial": {"cp": 4.18, "latente": 0.0, "tipo": "sensivel"},
     "Glicol 20%": {"cp": 3.85, "latente": 0.0, "tipo": "sensivel"},
@@ -48,7 +46,6 @@ BANCO_SERVICOS = {
     "Amonia Anidra (R717)": {"cp": 0.0, "latente": 1260.0, "tipo": "latente"}
 }
 
-# CATÁLOGO EXPANDIDO E ATUALIZADO: Divisão técnica por categoria geométrica de placa
 BANCO_MODELOS = {
     # --- TROCADORES SIMPLES (Gaxetados Tradicionais) ---
     "Alfa Laval M3 (Simples)": {"area_placa": 0.03, "U_base": 3800, "classe": "Simples"},
@@ -71,9 +68,16 @@ BANCO_MODELOS = {
     "Alfa Laval M20MW (Semi-Soldado)": {"area_placa": 0.98, "U_base": 5800, "classe": "Semi-Soldado"}
 }
 
-# --- TOPBANE VISUAL CUSTOMIZADO ---
-st.markdown('<div class="main-hdr">▲ AlfaVed Soluções Industriais</div>', unsafe_allow_html=True)
-st.markdown('<div class="sub-hdr">Dashboard de Engenharia Térmica Avançada e Dimensionamento Hidrodinâmico</div>', unsafe_allow_html=True)
+# --- 📐 BLOCO DO CABEÇALHO COMPACTO COM LOGOTIPO ---
+col_logo, col_tit = st.columns([1, 6])
+
+with col_logo:
+    # Caso você queira usar sua logo local, mude o link abaixo para "logo.png" e suba o arquivo no seu GitHub
+    st.image("https://imgur.com", width=110)
+
+with col_tit:
+    st.markdown('<div class="main-hdr">AlfaVed Soluções Industriais</div>', unsafe_allow_html=True)
+    st.markdown('<div class="sub-hdr">Dashboard de Engenharia Térmica Avançada e Dimensionamento Hidrodinâmico</div>', unsafe_allow_html=True)
 
 # Barra Lateral Otimizada
 st.sidebar.header("Configurações do Projeto")
@@ -136,12 +140,10 @@ if disparar_calculo:
     placas = math.ceil(area_m2 / area_por_placa) + 2
     if placas % 2 != 0: placas += 1
 
-    # ---- SISTEMA EXPERTO: TRAVA DE ENGENHARIA PARA AMÔNIA E FLUIDOS CRÍTICOS ----
     gaxeta_material = "EPDM Standard"
     risco_incrustacao = "baixo devido ao regime de escoamento turbulento gerado pelas placas."
     aviso_seguranca = ""
 
-    # Alerta de Engenharia se o usuário usar Amônia em um trocador simples por engano
     if servico_sel == "Amonia Anidra (R717)" and classe_modelo == "Simples":
         aviso_seguranca = "⚠️ [ALERTA DE SEGURANÇA] O uso de Amônia em trocador Gaxetado Simples apresenta risco severo de vazamentos nas gaxetas de canal. Recomenda-se migrar o projeto para um modelo Semi-Soldado da Alfa Laval (M10BW, T20BW, etc.)."
         gaxeta_material = "Neoprene Criogênico com barreira química reforçada"
@@ -150,7 +152,7 @@ if disparar_calculo:
         gaxeta_material = "Gaxetas de anel O-Ring em Cloroprene refratário no canal soldado e EPDM nos canais sensíveis"
 
     if servico_sel == "Vapor Saturado":
-        gaxeta_material = "Viton de Alta Densidade (HT)"
+        gaxeta_material = "Viton de Alta Temperatura ou EPDM de Alta Densidade (HT)"
         risco_incrustacao = f"alto na parede devido ao choque térmico com o produto {produto}. Exige rotina de limpeza CIP."
 
     if produto == "Oleo Vegetal":
@@ -159,7 +161,6 @@ if disparar_calculo:
 
     parecer_ia = f"Parecer Técnico AlfaVed. O dimensionamento para o fluido {produto} operando com o utilitário {servico_sel} no modelo {modelo} indica uma demanda térmica de {carga_kw:.2f} kW. Para conter esse processo com total estanqueidade, a engenharia especifica o uso de gaxetas em {gaxeta_material}. O risco de incrustação é classificado como {risco_incrustacao} {aviso_seguranca} Arranjo final homologado com {placas} placas paralelas (área unitária de {area_por_placa} m²) e coeficiente global de {U_adotado:.0f} W/m².K."
 
-    # RENDERIZAÇÃO EM TELA ÚNICA CONTINUA
     st.markdown("### 📊 Indicadores Hidro-Térmicos Rápidos")
     m_col1, m_col2, m_col3, m_col4 = st.columns(4)
     m_col1.metric("Carga Térmica Total", f"{carga_kw:.2f} kW")
@@ -174,3 +175,5 @@ if disparar_calculo:
     g_col1, g_col2, g_col3 = st.columns(3)
     g_col1.write(f"**Modelo Equipamento:** {modelo} ({classe_modelo})")
     g_col2.write(f"**Tag Equipamento:** {tag}")
+    g_col3.write(f"**Número do Projeto:** {projeto}")
+    
