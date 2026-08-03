@@ -4,13 +4,19 @@ import math
 import io
 
 # Configuração da página Web do Software AlfaVed
-st.set_page_config(page_title="AlfaVed Engenharia", page_icon="▲", layout="wide")
+st.set_page_config(page_title="AlfaVed Engenharia", page_icon="A", layout="wide")
 
-from reportlab.lib.pagesizes import letter
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.lib import colors
-from reportlab.pdfgen import canvas
+# Importação condicional do reportlab
+try:
+    from reportlab.lib.pagesizes import letter
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib import colors
+    from reportlab.pdfgen import canvas
+    REPORTLAB_AVAILABLE = True
+except ImportError:
+    REPORTLAB_AVAILABLE = False
+    st.warning("AVISO: Biblioteca reportlab nao disponivel. Funcao de PDF sera desabilitada.")
 
 # ==========================================
 # BANCO COMPLETO DE MODELOS ALFA LAVAL
@@ -156,35 +162,36 @@ PLACAS_LIMITE_MULTI_PASSE = 40  # Acima disso considerar multi passe
 PLACAS_LIMITE_MULTI_SECAO = 100  # Acima disso considerar multi seção
 VAZAO_RATIO_LIMITE = 3.0  # Ratio acima do qual considerar configurações especiais
 
-styles_doc = getSampleStyleSheet()
-st_tit = ParagraphStyle('T1', parent=styles_doc['Heading1'], fontName='Helvetica-Bold', fontSize=22, textColor=colors.HexColor("#0d1b2a"))
-st_sub = ParagraphStyle('T2', parent=styles_doc['Normal'], fontName='Helvetica', fontSize=10, textColor=colors.HexColor("#d90429"), spaceAfter=15)
-st_h2 = ParagraphStyle('T3', parent=styles_doc['Heading2'], fontName='Helvetica-Bold', fontSize=12, textColor=colors.HexColor("#003049"), spaceBefore=10, spaceAfter=5)
-st_h3 = ParagraphStyle('T3b', parent=styles_doc['Heading3'], fontName='Helvetica-Bold', fontSize=10, textColor=colors.HexColor("#003049"), spaceBefore=8, spaceAfter=4)
-st_body = ParagraphStyle('T4', parent=styles_doc['Normal'], fontName='Helvetica', fontSize=9, textColor=colors.HexColor("#222222"), leading=12)
-st_th = ParagraphStyle('T5', parent=styles_doc['Normal'], fontName='Helvetica-Bold', fontSize=9, textColor=colors.white)
-st_tc = ParagraphStyle('T6', parent=styles_doc['Normal'], fontName='Helvetica', fontSize=9, textColor=colors.HexColor("#333333"))
+if REPORTLAB_AVAILABLE:
+    styles_doc = getSampleStyleSheet()
+    st_tit = ParagraphStyle('T1', parent=styles_doc['Heading1'], fontName='Helvetica-Bold', fontSize=22, textColor=colors.HexColor("#0d1b2a"))
+    st_sub = ParagraphStyle('T2', parent=styles_doc['Normal'], fontName='Helvetica', fontSize=10, textColor=colors.HexColor("#d90429"), spaceAfter=15)
+    st_h2 = ParagraphStyle('T3', parent=styles_doc['Heading2'], fontName='Helvetica-Bold', fontSize=12, textColor=colors.HexColor("#003049"), spaceBefore=10, spaceAfter=5)
+    st_h3 = ParagraphStyle('T3b', parent=styles_doc['Heading3'], fontName='Helvetica-Bold', fontSize=10, textColor=colors.HexColor("#003049"), spaceBefore=8, spaceAfter=4)
+    st_body = ParagraphStyle('T4', parent=styles_doc['Normal'], fontName='Helvetica', fontSize=9, textColor=colors.HexColor("#222222"), leading=12)
+    st_th = ParagraphStyle('T5', parent=styles_doc['Normal'], fontName='Helvetica-Bold', fontSize=9, textColor=colors.white)
+    st_tc = ParagraphStyle('T6', parent=styles_doc['Normal'], fontName='Helvetica', fontSize=9, textColor=colors.HexColor("#333333"))
 
-class NumberedCanvas(canvas.Canvas):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self._saved_page_states = []
+    class NumberedCanvas(canvas.Canvas):
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+            self._saved_page_states = []
 
-    def showPage(self):
-        self._saved_page_states.append(dict(self.__dict__))
-        self._startPage()
+        def showPage(self):
+            self._saved_page_states.append(dict(self.__dict__))
+            self._startPage()
 
-    def save(self):
-        num_pages = len(self._saved_page_states)
-        for state in self._saved_page_states:
-            self.__dict__.update(state)
-            self.setFont("Helvetica", 9)
-            self.setFillColor(colors.HexColor("#666666"))
-            self.drawString(54, 25, "AlfaVed Solucoes Industriais - Engenharia Termica")
-            largura_real = letter[0] if isinstance(letter, (list, tuple)) else letter
-            self.drawRightString(largura_real - 54, 25, f"Pagina {self._pageNumber} de {num_pages}")
-            super().showPage()
-        super().save()
+        def save(self):
+            num_pages = len(self._saved_page_states)
+            for state in self._saved_page_states:
+                self.__dict__.update(state)
+                self.setFont("Helvetica", 9)
+                self.setFillColor(colors.HexColor("#666666"))
+                self.drawString(54, 25, "AlfaVed Solucoes Industriais - Engenharia Termica")
+                largura_real = letter[0] if isinstance(letter, (list, tuple)) else letter
+                self.drawRightString(largura_real - 54, 25, f"Pagina {self._pageNumber} de {num_pages}")
+                super().showPage()
+            super().save()
 
 
 def calculate_reynolds(vazao_kg_h: float, viscosidade: float, densidade: float, dh: float) -> float:
@@ -476,7 +483,7 @@ def calculate_dimensionamento(produto: str, dados_fluido: dict, modelo: str, dad
     # Verificar limites práticos por tipo de modelo
     limite_max = PLACA_MAXIMA_GAXETADA if tipo_modelo == "gaxetado" else PLACA_MAXIMA_SEMI_SOLDADO
     if placas > limite_max:
-        aviso_limite = f"⚠️ Quantidade de placas ({placas}) excede limite prático para {tipo_modelo} ({limite_max}). Considere modelo maior."
+        aviso_limite = f"AVISO: Quantidade de placas ({placas}) excede limite pratico para {tipo_modelo} ({limite_max}). Considere modelo maior."
         placas = limite_max
     else:
         aviso_limite = None
@@ -539,6 +546,9 @@ def calculate_dimensionamento(produto: str, dados_fluido: dict, modelo: str, dad
 
 
 def build_pdf(modelo: str, tag: str, projeto: str, produto: str, servico: str, t_in_prod: float, t_out_prod: float, t_in_serv: float, t_out_serv: float, vazao_prod: float, vazao_serv: float, resultados: dict, tipo_modelo: str) -> bytes:
+    if not REPORTLAB_AVAILABLE:
+        return None
+    
     pdf_buffer = io.BytesIO()
     doc = SimpleDocTemplate(pdf_buffer, pagesize=letter, rightMargin=54, leftMargin=54, topMargin=54, bottomMargin=54)
     story = [
@@ -746,7 +756,7 @@ def main() -> None:
     # Header
     st.markdown("""
     <div class="main-header">
-        <h1>▲ AlfaVed Engenharia Térmica</h1>
+        <h1>AlfaVed Engenharia Termica</h1>
         <h3>Dimensionador Inteligente de Trocadores de Calor</h3>
         <p>Análise de Turbulência | Recomendação de Placas | Parecer Técnico com IA</p>
     </div>
@@ -757,19 +767,19 @@ def main() -> None:
     
     # ==================== COLUNA DE ENTRADA ====================
     with input_col:
-        st.markdown("### 📋 DADOS DE PROJETO")
+        st.markdown("### DADOS DE PROJETO")
         
         with st.form("form_dimensionamento", clear_on_submit=False):
             
             # Seção Projeto
-            st.markdown("#### 📌 Informações do Projeto")
+            st.markdown("#### Informacoes do Projeto")
             tag = st.text_input("Tag do Equipamento", "TC-101")
             projeto = st.text_input("Número do Projeto", "PRJ-ALFAVED-2026")
             
             st.divider()
             
             # Seção Modelo
-            st.markdown("#### ⚙️ Seleção do Modelo")
+            st.markdown("#### Selecao do Modelo")
             modelo = st.selectbox("Modelo Alfa Laval", list(BANCO_MODELOS.keys()))
             tipo_modelo = BANCO_MODELOS[modelo]["tipo"].upper()
             st.caption(f"Tipo: **{tipo_modelo}** | Pressão Máx: **{BANCO_MODELOS[modelo]['pressao_max']} bar**")
@@ -777,7 +787,7 @@ def main() -> None:
             st.divider()
             
             # Seção Produto
-            st.markdown("#### 🔴 Lado do Produto")
+            st.markdown("#### Lado do Produto")
             col_prod1, col_prod2 = st.columns(2)
             with col_prod1:
                 produto = st.selectbox("Fluido do Produto", list(BANCO_FLUIDOS.keys()))
@@ -793,7 +803,7 @@ def main() -> None:
             st.divider()
             
             # Seção Serviço
-            st.markdown("#### 🔵 Lado do Serviço")
+            st.markdown("#### Lado do Servico")
             servico = st.selectbox("Fluido de Serviço", list(BANCO_SERVICOS.keys()))
             
             col_temp_serv1, col_temp_serv2 = st.columns(2)
@@ -805,7 +815,7 @@ def main() -> None:
             st.divider()
             
             # Botão de Cálculo
-            submitted = st.form_submit_button("🔄 CALCULAR DIMENSIONAMENTO", use_container_width=True, type="primary")
+            submitted = st.form_submit_button("CALCULAR DIMENSIONAMENTO", use_container_width=True, type="primary")
             
         
         # ==================== PROCESSAMENTO E CÁLCULO ====================
@@ -872,7 +882,7 @@ def main() -> None:
                 st.session_state.calc_t_out_serv = float(t_out_serv)
                 st.session_state.calc_vazao_prod = float(vazao_prod)
                 
-                st.success("✅ Cálculo realizado com sucesso!")
+                st.success("Calculo realizado com sucesso!")
             except Exception as e:
                 st.error(f"Erro ao armazenar dados na sessão: {str(e)}")
                 st.stop()
@@ -882,7 +892,7 @@ def main() -> None:
         if 'calc_resultados' in st.session_state:
             resultados = st.session_state.calc_resultados
             
-            st.markdown("### 📊 RESULTADOS DO DIMENSIONAMENTO")
+            st.markdown("### RESULTADOS DO DIMENSIONAMENTO")
             
             # KPIs principais
             kpi_col1, kpi_col2, kpi_col3, kpi_col4 = st.columns(4)
@@ -922,7 +932,7 @@ def main() -> None:
             st.divider()
             
             # Análise de Turbulência
-            st.markdown("#### 🌊 Análise de Turbulência")
+            st.markdown("#### Analise de Turbulencia")
             
             turb_col1, turb_col2 = st.columns(2)
             
@@ -943,7 +953,7 @@ def main() -> None:
             st.divider()
             
             # Recomendação de Placa
-            st.markdown("#### 🎯 Configuração Recomendada")
+            st.markdown("#### Configuracao Recomendada")
             
             placa_info = ANGULOS_PLACA[resultados['tipo_placa']]
             
@@ -969,7 +979,7 @@ def main() -> None:
                 </div>
                 """, unsafe_allow_html=True)
             
-            st.info(f"💡 {resultados['justificativa_placa']}")
+            st.info(f"INFO: {resultados['justificativa_placa']}")
             
             # Mostrar aviso se houver limite de placas
             if resultados.get('aviso_limite'):
@@ -977,7 +987,7 @@ def main() -> None:
             
             # Detalhes adicionais do dimensionamento (apenas se dados novos estiverem disponíveis)
             if all(key in resultados for key in ['fator_seguranca', 'fator_placa', 'area_teorica_m2', 'area_segura_m2', 'passes']):
-                st.markdown("#### 📐 Detalhes do Dimensionamento")
+                st.markdown("#### Detalhes do Dimensionamento")
                 
                 det_col1, det_col2, det_col3 = st.columns(3)
                 
@@ -1013,7 +1023,7 @@ def main() -> None:
             
             # Nova seção de configuração de passe e cabeçotes
             if all(key in resultados for key in ['tipo_passe', 'entrada_produto', 'saida_produto', 'entrada_servico', 'saida_servico']):
-                st.markdown("#### 🔧 Configuração de Passe e Cabeçotes")
+                st.markdown("#### Configuracao de Passe e Cabecotes")
                 
                 passe_col1, passe_col2 = st.columns(2)
                 
@@ -1033,12 +1043,12 @@ def main() -> None:
                     st.markdown(f"""
                     <div class="result-warning">
                     <h4>Configuração: <strong>{resultados['configuracao_cabecotes']}</strong></h4>
-                    <p><strong>🔴 Produto:</strong></p>
+                    <p><strong>Produto:</strong></p>
                     <p>→ Entrada: {resultados['entrada_produto']}</p>
-                    <p>→ Saída: {resultados['saida_produto']}</p>
-                    <p><strong>🔵 Serviço:</strong></p>
+                    <p>→ Saida: {resultados['saida_produto']}</p>
+                    <p><strong>Servico:</strong></p>
                     <p>→ Entrada: {resultados['entrada_servico']}</p>
-                    <p>→ Saída: {resultados['saida_servico']}</p>
+                    <p>→ Saida: {resultados['saida_servico']}</p>
                     <hr>
                     <p><small>{resultados['justificativa_cabecotes']}</small></p>
                     </div>
@@ -1047,7 +1057,7 @@ def main() -> None:
             st.divider()
             
             # Contatos e PDF
-            st.markdown("#### 📋 Documentação e Contatos")
+            st.markdown("#### Documentacao e Contatos")
             
             pdf_bytes = build_pdf(
                 st.session_state.calc_modelo, st.session_state.calc_tag, st.session_state.calc_projeto,
@@ -1058,44 +1068,47 @@ def main() -> None:
                 resultados, st.session_state.calc_tipo_modelo
             )
             
-            st.download_button(
-                label="📥 Download Datasheet PDF",
-                data=pdf_bytes,
-                file_name="datasheet_alfaved.pdf",
-                mime="application/pdf",
-                use_container_width=True
-            )
+            if pdf_bytes is not None:
+                st.download_button(
+                    label="Download Datasheet PDF",
+                    data=pdf_bytes,
+                    file_name="datasheet_alfaved.pdf",
+                    mime="application/pdf",
+                    use_container_width=True
+                )
+            else:
+                st.warning("AVISO: Geracao de PDF nao disponivel - biblioteca reportlab nao instalada")
             
             # Seção de contatos
             st.divider()
-            st.markdown("#### 👥 Contatos Técnicos - AlfaVed")
+            st.markdown("#### Contatos Tecnicos - AlfaVed")
             
             contatos_col1, contatos_col2 = st.columns(2)
             
             with contatos_col1:
                 st.markdown(f"""
                 <div class="section-card">
-                <h4>👤 {CONTATOS_ALFAVED['vitor_soares']['nome']}</h4>
+                <h4>{CONTATOS_ALFAVED['vitor_soares']['nome']}</h4>
                 <p><strong>Cargo:</strong> {CONTATOS_ALFAVED['vitor_soares']['cargo']}</p>
-                <p><strong>📧 Email:</strong> {CONTATOS_ALFAVED['vitor_soares']['email']}</p>
-                <p><strong>📱 Telefone:</strong> {CONTATOS_ALFAVED['vitor_soares']['telefone']}</p>
+                <p><strong>Email:</strong> {CONTATOS_ALFAVED['vitor_soares']['email']}</p>
+                <p><strong>Telefone:</strong> {CONTATOS_ALFAVED['vitor_soares']['telefone']}</p>
                 </div>
                 """, unsafe_allow_html=True)
             
             with contatos_col2:
                 st.markdown(f"""
                 <div class="section-card">
-                <h4>👤 {CONTATOS_ALFAVED['jhonatan_dias']['nome']}</h4>
+                <h4>{CONTATOS_ALFAVED['jhonatan_dias']['nome']}</h4>
                 <p><strong>Cargo:</strong> {CONTATOS_ALFAVED['jhonatan_dias']['cargo']}</p>
-                <p><strong>📧 Email:</strong> {CONTATOS_ALFAVED['jhonatan_dias']['email']}</p>
-                <p><strong>📱 Telefone:</strong> {CONTATOS_ALFAVED['jhonatan_dias']['telefone']}</p>
+                <p><strong>Email:</strong> {CONTATOS_ALFAVED['jhonatan_dias']['email']}</p>
+                <p><strong>Telefone:</strong> {CONTATOS_ALFAVED['jhonatan_dias']['telefone']}</p>
                 </div>
                 """, unsafe_allow_html=True)
         else:
             st.markdown("""
             <div class="section-card">
             <p style="text-align: center; color: #999;">
-            👈 Preencha os dados de entrada e clique em <strong>CALCULAR DIMENSIONAMENTO</strong>
+            Preencha os dados de entrada e clique em <strong>CALCULAR DIMENSIONAMENTO</strong>
             </p>
             </div>
             """, unsafe_allow_html=True)
