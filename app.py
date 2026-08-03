@@ -30,8 +30,20 @@ BANCO_FLUIDOS = {
 BANCO_SERVICOS = BANCO_FLUIDOS
 
 ANGULOS_PLACA = {
-    "30 H": {"descricao": "Alta turbulência, queda de pressão maior", "turbulencia": "Alta", "queda_pressao": "Alta", "fator_placas": 1.2, "fator_placas": 1.2, "fator_placas": 1.2},
-    "45 HT": {"descricao": "Muito turbulento", "turbulencia": "Muito Alta", "queda_pressao": "Muito Alta", "fator_placas": 1.3}
+    "30 H": {
+        "descricao": "Alta turbulência, queda de pressão maior",
+        "turbulencia": "Alta",
+        "queda_pressao": "Alta",
+        "fator_placas": 1.2,
+        "multiplicador_u": 1.0
+    },
+    "45 HT": {
+        "descricao": "Muito turbulento",
+        "turbulencia": "Muito Alta",
+        "queda_pressao": "Muito Alta",
+        "fator_placas": 1.3,
+        "multiplicador_u": 1.1
+    }
 }
 
 # Fallback default plate
@@ -57,19 +69,28 @@ CONTATOS_ALFAVED = {
 # --- Utility functions (simple, safe implementations) ---
 
 def calculate_reynolds(vazao_kg_h: float, viscosidade_mPa_s: float, densidade_kg_m3: float, dh: float) -> float:
-    """Rough Reynolds number estimation using mass flow -> velocity conversion with assumed area.
-    This is a simplified placeholder for demo/testing purposes."""
-    if vazao_kg_h <= 0 or viscosidade_mPa_s <= 0:
+    """Estimativa simples do número de Reynolds.
+    Protege contra densidade inválida e viscosidade/dh iguais a zero.
+    Nota: implementação placeholder - adaptar para área/diâmetro reais."""
+    try:
+        if vazao_kg_h <= 0 or viscosidade_mPa_s <= 0:
+            return 0.0
+        if densidade_kg_m3 is None or densidade_kg_m3 <= 0:
+            return 0.0
+        # conversão de massa (kg/h) -> volume (m3/s)
+        vazao_m3_s = vazao_kg_h / (densidade_kg_m3 * 3600.0)
+        area = max((dh or 1e-3) * 0.1, 1e-4)
+        velocity = vazao_m3_s / area if area > 0 else 0.0
+        # viscosidade dinâmica: mPa.s -> Pa.s
+        dynamic_viscosity_pa_s = viscosidade_mPa_s * 1e-3
+        # viscosidade cinemática nu = mu / rho (m^2/s)
+        nu = dynamic_viscosity_pa_s / densidade_kg_m3 if densidade_kg_m3 > 0 else 0.0
+        if nu <= 0 or dh is None or dh <= 0:
+            return 0.0
+        re = abs(velocity * dh / nu)
+        return re
+    except Exception:
         return 0.0
-    # assume characteristic area = dh (not physical) -> just to produce numbers
-    vazao_m3_s = vazao_kg_h / (densidade_kg_m3 * 3600.0)
-    area = max(dh * 0.1, 1e-4)
-    velocity = vazao_m3_s / area
-    # viscosity convert mPa.s to Pa.s (approx): 1 mPa.s = 0.001 Pa.s
-    nu = viscosidade_mPa_s * 1e-3 / densidade_kg_m3
-    if nu <= 0:
-        return 0.0
-    return abs(velocity * dh / nu)
 
 
 def classificar_turbulencia(re: float) -> Tuple[str, str]:
@@ -85,8 +106,12 @@ def classificar_turbulencia(re: float) -> Tuple[str, str]:
 def recomendar_angulo_placa(re_prod: float, re_serv: float, pressao_max: float, visc_prod: float, visc_serv: float) -> Tuple[str, float, str]:
     # Simple rule: se qualquer lado for turbulento, escolha placa mais turbulenta
     if re_prod > 10000 or re_serv > 10000:
-        return DEFAULT_PLACA, 1.0, "Placa para alto regime de turbulência"
-    return DEFAULT_PLACA, 1.0, "Placa padrão"
+        placa = DEFAULT_PLACA
+        multiplicador = ANGULOS_PLACA.get(placa, {}).get("multiplicador_u", 1.0)
+        return placa, multiplicador, "Placa para alto regime de turbulência"
+    placa = DEFAULT_PLACA
+    multiplicador = ANGULOS_PLACA.get(placa, {}).get("multiplicador_u", 1.0)
+    return placa, multiplicador, "Placa padrão"
 
 
 def get_viscosity_factor(dados_fluido: dict) -> float:
@@ -95,40 +120,49 @@ def get_viscosity_factor(dados_fluido: dict) -> float:
 
 
 def calculate_lmtd(dt1: float, dt2: float) -> float:
+    """Cálculo LMTD robusto.
+    Se dt1 == dt2 (ou muito próximos) retorna dt (não força a 1.0).
+    Se qualquer ΔT for <= 0 trata de forma segura."""
     dt1_abs = abs(dt1)
     dt2_abs = abs(dt2)
-    if dt1_abs < 1e-6 and dt2_abs < 1e-6:
-        return 1.0
-    if abs(dt1_abs - dt2_abs) < 1e-6:
-        return max(dt1_abs, dt2_abs, 1.0)
-    if dt1_abs > 0 and dt2_abs > 0:
-        try:
-            return abs((dt1_abs - dt2_abs) / math.log(dt1_abs / dt2_abs))
-        except Exception:
-            return max(dt1_abs, dt2_abs, 1.0)
-    return max(dt1_abs, dt2_abs, 1.0)
+    # Se ambos praticamente zero, retorna valor pequeno para evitar divisão por zero
+    if dt1_abs < 1e-12 and dt2_abs < 1e-12:
+        return 1e-12
+    # Se iguais (ou quase), LMTD => dt
+    if abs(dt1_abs - dt2_abs) < 1e-9:
+        return dt1_abs
+    # Se um dos deltas for zero ou negativo (tratado como pequeno), evita ln(0)
+    if dt1_abs <= 0 or dt2_abs <= 0:
+        return max(dt1_abs, dt2_abs, 1e-12)
+    try:
+        lmtd = abs((dt1_abs - dt2_abs) / math.log(dt1_abs / dt2_abs))
+        return lmtd if lmtd > 0 else max(dt1_abs, dt2_abs)
+    except Exception:
+        return max(dt1_abs, dt2_abs)
 
 
 # --- Configuração de passe e cabeçotes (simplificada e corrigida) ---
 
 def calcular_tipo_passe(placas: int, vazao_prod: float, vazao_serv: float, tipo_modelo: str) -> dict:
+    """Decide tipo de passe considerando limites. Corrigida ordem de verificação de limites."""
     vazao_ratio = (max(vazao_prod, vazao_serv) / min(vazao_prod, vazao_serv)) if min(vazao_prod, vazao_serv) > 0 else 1.0
     tipo_passe = "Simples"
     passes_produto = 1
     passes_servico = 1
     justificativa_passe = "Configuração simples adequada para este dimensionamento"
 
-    if placas > PLACAS_LIMITE_MULTI_PASSE:
+    # Primeiro verificar o limite mais alto (multi seção)
+    if placas > PLACAS_LIMITE_MULTI_SECAO:
+        tipo_passe = "Multi Seção"
+        passes_produto = 2
+        passes_servico = 2
+        justificativa_passe = f"Quantidade de placas ({placas}) muito elevada. Multi seção recomendada."
+    elif placas > PLACAS_LIMITE_MULTI_PASSE:
         if vazao_ratio > VAZAO_RATIO_LIMITE:
             tipo_passe = "Multi Passe"
             passes_produto = 2 if vazao_prod > vazao_serv else 1
             passes_servico = 2 if vazao_serv > vazao_prod else 1
             justificativa_passe = f"Ratio de vazão elevado ({vazao_ratio:.1f}) com {placas} placas. Multi passe recomendado."
-        elif placas > PLACAS_LIMITE_MULTI_SECAO:
-            tipo_passe = "Multi Seção"
-            passes_produto = 2
-            passes_servico = 2
-            justificativa_passe = f"Quantidade de placas ({placas}) muito elevada. Multi seção recomendada."
         else:
             tipo_passe = "Multi Passe"
             passes_produto = 2
