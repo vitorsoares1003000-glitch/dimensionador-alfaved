@@ -151,6 +151,11 @@ PLACA_MAXIMA_GAXETADA = 200  # Limite prático para gaxetados
 PLACA_MAXIMA_SEMI_SOLDADO = 300  # Limite prático para semi-soldados
 COEFICIENTE_FOULING = 0.9  # Fator de incrustação padrão
 
+# Configurações de passe e cabeçotes
+PLACAS_LIMITE_MULTI_PASSE = 40  # Acima disso considerar multi passe
+PLACAS_LIMITE_MULTI_SECAO = 100  # Acima disso considerar multi seção
+VAZAO_RATIO_LIMITE = 3.0  # Ratio acima do qual considerar configurações especiais
+
 styles_doc = getSampleStyleSheet()
 st_tit = ParagraphStyle('T1', parent=styles_doc['Heading1'], fontName='Helvetica-Bold', fontSize=22, textColor=colors.HexColor("#0d1b2a"))
 st_sub = ParagraphStyle('T2', parent=styles_doc['Normal'], fontName='Helvetica', fontSize=10, textColor=colors.HexColor("#d90429"), spaceAfter=15)
@@ -267,6 +272,136 @@ def get_viscosity_factor(dados_fluido: dict) -> float:
     return 1.0 / math.sqrt(viscosidade)
 
 
+def calcular_tipo_passe(placas: int, vazao_prod: float, vazao_serv: float, tipo_modelo: str) -> dict:
+    """
+    Determina o tipo de passe ideal baseado em:
+    - Número de placas
+    - Ratio de vazão entre produto e serviço
+    - Tipo de modelo (gaxetado vs semi-soldado)
+    """
+    vazao_ratio = max(vazao_prod, vazao_serv) / min(vazao_prod, vazao_serv) if min(vazao_prod, vazao_serv) > 0 else 1.0
+    
+    tipo_passe = "Simples"
+    passes_produto = 1
+    passes_servico = 1
+    justificativa_passe = "Configuração simples adequada para este dimensionamento"
+    
+    # Lógica para multi passe
+    if placas > PLACAS_LIMITE_MULTI_PASSE:
+        if vazao_ratio > VAZAO_RATIO_LIMITE:
+            # Vazões muito diferentes - considerar passes diferentes
+            tipo_passe = "Multi Passe"
+            passes_produto = 2 if vazao_prod > vazao_serv else 1
+            passes_servico = 2 if vazao_serv > vazao_prod else 1
+            justificativa_passe = f"Ratio de vazão elevado ({vazao_ratio:.1f}) com {placas} placas. Multi passe recomendado para balancear distribuição."
+        elif placas > PLACAS_LIMITE_MULTI_SECAO:
+            # Muitas placas - considerar multi seção
+            tipo_passe = "Multi Seção"
+            passes_produto = 2
+            passes_servico = 2
+            justificativa_passe = f"Quantidade de placas ({placas}) muito elevada. Multi seção recomendada para melhor manutenção e eficiência."
+        else:
+            # Multi passe padrão
+            tipo_passe = "Multi Passe"
+            passes_produto = 2
+            passes_servico = 2
+            justificativa_passe = f"Quantidade de placas ({placas}) indica benefício em multi passe para melhor distribuição de fluxo."
+    
+    # Ajuste para semi-soldados (mais restritos)
+    if tipo_modelo == "semi-soldado" and tipo_passe == "Multi Seção":
+        tipo_passe = "Multi Passe"
+        justificativa_passe = "Modelo semi-soldado tem limitações para multi seção. Multi passe adotado como alternativa."
+    
+    return {
+        "tipo_passe": tipo_passe,
+        "passes_produto": passes_produto,
+        "passes_servico": passes_servico,
+        "vazao_ratio": vazao_ratio,
+        "justificativa_passe": justificativa_passe
+    }
+
+
+def calcular_configuracao_cabecotes(placas: int, tipo_passe: str, passes_produto: int, passes_servico: int, tipo_modelo: str) -> dict:
+    """
+    Determina a configuração ideal de cabeçotes (fixo/móvel) baseado em:
+    - Tipo de passe
+    - Número de passes de cada lado
+    - Tipo de modelo
+    - Número de placas
+    """
+    # Configuração padrão
+    entrada_prod = "Cabeçote Fixo"
+    saida_prod = "Cabeçote Móvel"
+    entrada_serv = "Cabeçote Móvel"
+    saida_serv = "Cabeçote Fixo"
+    configuracao = "Contra-corrente Padrão"
+    justificativa_cabecotes = "Configuração padrão contra-corrente com entrada em cabeçote fixo e saída em móvel"
+    
+    # Ajustes baseados no tipo de passe
+    if tipo_passe == "Multi Passe":
+        if passes_produto > 1 or passes_servico > 1:
+            # Multi passe requer cabeçotes específicos
+            if passes_produto == 2 and passes_servico == 2:
+                entrada_prod = "Cabeçote Fixo"
+                saida_prod = "Cabeçote Fixo"
+                entrada_serv = "Cabeçote Móvel"
+                saida_serv = "Cabeçote Móvel"
+                configuracao = "Multi Passe Simétrico"
+                justificativa_cabecotes = "Multi passe simétrico com ambos os lados entrando/saindo em cabeçotes distintos para melhor distribuição"
+            elif passes_produto == 2:
+                entrada_prod = "Cabeçote Fixo"
+                saida_prod = "Cabeçote Fixo"
+                entrada_serv = "Cabeçote Móvel"
+                saida_serv = "Cabeçote Fixo"
+                configuracao = "Multi Passe Assimétrico"
+                justificativa_cabecotes = "Multi passe assimétrico com produto em 2 passes e serviço em passe simples"
+            else:
+                entrada_prod = "Cabeçote Fixo"
+                saida_prod = "Cabeçote Móvel"
+                entrada_serv = "Cabeçote Móvel"
+                saida_serv = "Cabeçote Móvel"
+                configuracao = "Multi Passe Assimétrico"
+                justificativa_cabecotes = "Multi passe assimétrico com serviço em 2 passes e produto em passe simples"
+    
+    elif tipo_passe == "Multi Seção":
+        # Multi seção permite configurações mais flexíveis
+        entrada_prod = "Cabeçote Fixo"
+        saida_prod = "Cabeçote Móvel"
+        entrada_serv = "Cabeçote Móvel"
+        saida_serv = "Cabeçote Fixo"
+        configuracao = "Multi Seção em Paralelo"
+        justificativa_cabecotes = "Multi seção configurada em paralelo para facilitar manutenção e aumentar disponibilidade"
+    
+    # Ajustes para grandes números de placas
+    if placas > 150:
+        if tipo_passe == "Simples":
+            entrada_prod = "Cabeçote Fixo"
+            saida_prod = "Cabeçote Móvel"
+            entrada_serv = "Cabeçote Móvel"
+            saida_serv = "Cabeçote Fixo"
+            configuracao = "Contra-corrente com Distribuidor"
+            justificativa_cabecotes = f"Grande número de placas ({placas}) recomenda distribuidores de fluxo para melhor performance"
+    
+    # Ajustes específicos para semi-soldados
+    if tipo_modelo == "semi-soldado":
+        if tipo_passe == "Multi Passe":
+            entrada_prod = "Cabeçote Fixo"
+            saida_prod = "Cabeçote Fixo"
+            entrada_serv = "Cabeçote Móvel"
+            saida_serv = "Cabeçote Móvel"
+            configuracao = "Multi Passe Semi-Soldado"
+            justificativa_cabecotes = "Configuração otimizada para modelo semi-soldado com restrições de conexão"
+    
+    return {
+        "entrada_produto": entrada_prod,
+        "saida_produto": saida_prod,
+        "entrada_servico": entrada_serv,
+        "saida_servico": saida_serv,
+        "configuracao": configuracao,
+        "justificativa_cabecotes": justificativa_cabecotes
+    }
+
+
 def calculate_lmtd(dt1: float, dt2: float) -> float:
     dt1_abs = abs(dt1)
     dt2_abs = abs(dt2)
@@ -350,8 +485,15 @@ def calculate_dimensionamento(produto: str, dados_fluido: dict, modelo: str, dad
     area_efetiva_m2 = (placas - 2) * area_por_placa  # -2 para placas de extremidade
     folga_area = ((area_efetiva_m2 - area_teorica_m2) / area_teorica_m2 * 100) if area_teorica_m2 > 0 else 0
     
-    # Número de passes (simplificado - assume contra-corrente)
-    passes = "Contra-corrente"
+    # Determinar tipo de passe ideal
+    tipo_passe_info = calcular_tipo_passe(placas, vazao_prod, vazao_serv, tipo_modelo)
+    
+    # Determinar configuração de cabeçotes
+    cabecotes_info = calcular_configuracao_cabecotes(
+        placas, tipo_passe_info["tipo_passe"], 
+        tipo_passe_info["passes_produto"], tipo_passe_info["passes_servico"], 
+        tipo_modelo
+    )
     
     return {
         "carga_kw": carga_kw,
@@ -365,7 +507,7 @@ def calculate_dimensionamento(produto: str, dados_fluido: dict, modelo: str, dad
         "placas_teoricas": placas_teoricas,
         "area_por_placa": area_por_placa,
         "folga_area": folga_area,
-        "passes": passes,
+        "passes": cabecotes_info["configuracao"],  # Atualizado para compatibilidade
         "U_adotado": U_adotado,
         "U_base": dados_modelo["U_base"],
         "fator_viscosidade": fator_viscosidade,
@@ -380,7 +522,19 @@ def calculate_dimensionamento(produto: str, dados_fluido: dict, modelo: str, dad
         "desc_serv": desc_serv,
         "tipo_placa": tipo_placa,
         "justificativa_placa": justificativa_angulo,
-        "aviso_limite": aviso_limite
+        "aviso_limite": aviso_limite,
+        # Novos campos de configuração
+        "tipo_passe": tipo_passe_info["tipo_passe"],
+        "passes_produto": tipo_passe_info["passes_produto"],
+        "passes_servico": tipo_passe_info["passes_servico"],
+        "vazao_ratio": tipo_passe_info["vazao_ratio"],
+        "justificativa_passe": tipo_passe_info["justificativa_passe"],
+        "entrada_produto": cabecotes_info["entrada_produto"],
+        "saida_produto": cabecotes_info["saida_produto"],
+        "entrada_servico": cabecotes_info["entrada_servico"],
+        "saida_servico": cabecotes_info["saida_servico"],
+        "configuracao_cabecotes": cabecotes_info["configuracao"],
+        "justificativa_cabecotes": cabecotes_info["justificativa_cabecotes"]
     }
 
 
@@ -479,6 +633,40 @@ def build_pdf(modelo: str, tag: str, projeto: str, produto: str, servico: str, t
         tabela_dados.append([Paragraph("Configuracao", st_tc), Paragraph(resultados['passes'], st_tc)])
     
     story.append(Table(tabela_dados))
+    
+    # Nova seção de configuração de passe e cabeçotes
+    if all(key in resultados for key in ['tipo_passe', 'entrada_produto', 'saida_produto', 'entrada_servico', 'saida_servico']):
+        story.append(Spacer(1, 12))
+        story.append(Paragraph("6. Configuracao de Passe e Cabecotes", st_h2))
+        story.append(
+            Table([
+                [Paragraph("Especificacao", st_th), Paragraph("Valor", st_th)],
+                [Paragraph("Tipo de Passe", st_tc), Paragraph(resultados['tipo_passe'], st_tc)],
+                [Paragraph("Passes Produto", st_tc), Paragraph(str(resultados['passes_produto']), st_tc)],
+                [Paragraph("Passes Servico", st_tc), Paragraph(str(resultados['passes_servico']), st_tc)],
+                [Paragraph("Ratio Vazao", st_tc), Paragraph(f"{resultados['vazao_ratio']:.2f}", st_tc)],
+                [Paragraph("Justificativa Passe", st_tc), Paragraph(resultados['justificativa_passe'], st_tc)]
+            ])
+        )
+        
+        story.append(Spacer(1, 8))
+        story.append(
+            Table([
+                [Paragraph("Conexoes - Produto", st_th), Paragraph("Conexoes - Servico", st_th)],
+                [Paragraph(f"Entrada: {resultados['entrada_produto']}", st_tc), 
+                 Paragraph(f"Entrada: {resultados['entrada_servico']}", st_tc)],
+                [Paragraph(f"Saida: {resultados['saida_produto']}", st_tc),
+                 Paragraph(f"Saida: {resultados['saida_servico']}", st_tc)]
+            ])
+        )
+        
+        story.append(Spacer(1, 8))
+        story.append(
+            Table([
+                [Paragraph("Configuracao Geral", st_th), Paragraph(resultados['configuracao_cabecotes'], st_tc)],
+                [Paragraph("Justificativa Cabecotes", st_th), Paragraph(resultados['justificativa_cabecotes'], st_tc)]
+            ])
+        )
 
     for item in story:
         if isinstance(item, Table):
@@ -491,7 +679,7 @@ def build_pdf(modelo: str, tag: str, projeto: str, produto: str, servico: str, t
                 ])
             )
 
-    story.append(Paragraph("6. Contatos Técnicos - AlfaVed Soluções Industriais", st_h2))
+    story.append(Paragraph("7. Contatos Técnicos - AlfaVed Soluções Industriais", st_h2))
     
     # Tabela de contatos
     story.append(
@@ -820,6 +1008,39 @@ def main() -> None:
                     <p><strong>Placas:</strong> {resultados['placas']}</p>
                     <p><strong>Área/Placa:</strong> {resultados['area_por_placa']} m²</p>
                     <p><strong>Passes:</strong> {resultados['passes']}</p>
+                    </div>
+                    """, unsafe_allow_html=True)
+            
+            # Nova seção de configuração de passe e cabeçotes
+            if all(key in resultados for key in ['tipo_passe', 'entrada_produto', 'saida_produto', 'entrada_servico', 'saida_servico']):
+                st.markdown("#### 🔧 Configuração de Passe e Cabeçotes")
+                
+                passe_col1, passe_col2 = st.columns(2)
+                
+                with passe_col1:
+                    st.markdown(f"""
+                    <div class="result-success">
+                    <h4>Tipo de Passe: <strong>{resultados['tipo_passe']}</strong></h4>
+                    <p><strong>Passes Produto:</strong> {resultados['passes_produto']}</p>
+                    <p><strong>Passes Serviço:</strong> {resultados['passes_servico']}</p>
+                    <p><strong>Ratio Vazão:</strong> {resultados['vazao_ratio']:.2f}</p>
+                    <hr>
+                    <p><small>{resultados['justificativa_passe']}</small></p>
+                    </div>
+                    """, unsafe_allow_html=True)
+                
+                with passe_col2:
+                    st.markdown(f"""
+                    <div class="result-warning">
+                    <h4>Configuração: <strong>{resultados['configuracao_cabecotes']}</strong></h4>
+                    <p><strong>🔴 Produto:</strong></p>
+                    <p>→ Entrada: {resultados['entrada_produto']}</p>
+                    <p>→ Saída: {resultados['saida_produto']}</p>
+                    <p><strong>🔵 Serviço:</strong></p>
+                    <p>→ Entrada: {resultados['entrada_servico']}</p>
+                    <p>→ Saída: {resultados['saida_servico']}</p>
+                    <hr>
+                    <p><small>{resultados['justificativa_cabecotes']}</small></p>
                     </div>
                     """, unsafe_allow_html=True)
             
