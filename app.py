@@ -328,76 +328,104 @@ def calcular_tipo_passe(placas: int, vazao_prod: float, vazao_serv: float, tipo_
     }
 
 
-def calcular_configuracao_cabecotes(placas: int, tipo_passe: str, passes_produto: int, passes_servico: int, tipo_modelo: str) -> dict:
+def calcular_configuracao_cabecotes(placas: int, tipo_passe: str, passes_produto: int, passes_servico: int, tipo_modelo: str, tipo_placa: str) -> dict:
     """
     Determina a configuração ideal de cabeçotes (fixo/móvel) baseado em:
     - Tipo de passe
     - Número de passes de cada lado
     - Tipo de modelo
     - Número de placas
+    - Tipo de placa (para determinar se é turbulento)
+    
+    Configurações segundo especificação:
+    - 1 passe padrão: entrada e saída no cabeçote fixo
+    - 1 passe turbulento: entrada e saída opostas nos cabeçotes (fixo ↔ móvel)
     """
-    # Configuração padrão
-    entrada_prod = "Cabeçote Fixo"
-    saida_prod = "Cabeçote Móvel"
-    entrada_serv = "Cabeçote Móvel"
-    saida_serv = "Cabeçote Fixo"
-    configuracao = "Contra-corrente Padrão"
-    justificativa_cabecotes = "Configuração padrão contra-corrente com entrada em cabeçote fixo e saída em móvel"
+    # Determinar se é turbulento baseado no tipo de placa
+    placas_turbulentas = ["30 H", "45 HT"]  # Placas de alta turbulência
+    is_turbulento = tipo_placa in placas_turbulentas
+    
+    # Configuração baseada no tipo de passe e turbulência
+    if tipo_passe == "Simples":
+        if is_turbulento:
+            # 1 passe turbulento: entrada e saída opostas nos cabeçotes
+            entrada_prod = "Cabecote Fixo"
+            saida_prod = "Cabecote Movel"
+            entrada_serv = "Cabecote Movel"
+            saida_serv = "Cabecote Fixo"
+            configuracao = "1 Passe Turbulento (Cruzado)"
+            justificativa_cabecotes = "1 passe turbulento com entrada e saida opostas nos cabecotes (fixo <-> movel) para maxima eficiencia"
+        else:
+            # 1 passe padrão: entrada e saída no cabeçote fixo
+            entrada_prod = "Cabecote Fixo"
+            saida_prod = "Cabecote Fixo"
+            entrada_serv = "Cabecote Fixo"
+            saida_serv = "Cabecote Fixo"
+            configuracao = "1 Passe Padrao (Fixo)"
+            justificativa_cabecotes = "1 passe padrao com entrada e saida no cabecote fixo para simplicidade operacional"
     
     # Ajustes baseados no tipo de passe
     if tipo_passe == "Multi Passe":
         if passes_produto > 1 or passes_servico > 1:
-            # Multi passe requer cabeçotes específicos
+            # Multi passe requer cabecotes especificos
             if passes_produto == 2 and passes_servico == 2:
-                entrada_prod = "Cabeçote Fixo"
-                saida_prod = "Cabeçote Fixo"
-                entrada_serv = "Cabeçote Móvel"
-                saida_serv = "Cabeçote Móvel"
-                configuracao = "Multi Passe Simétrico"
-                justificativa_cabecotes = "Multi passe simétrico com ambos os lados entrando/saindo em cabeçotes distintos para melhor distribuição"
+                entrada_prod = "Cabecote Fixo"
+                saida_prod = "Cabecote Fixo"
+                entrada_serv = "Cabecote Movel"
+                saida_serv = "Cabecote Movel"
+                configuracao = "Multi Passe Simetrico"
+                justificativa_cabecotes = "Multi passe simetrico com ambos os lados entrando/saindo em cabecotes distintos para melhor distribuicao"
             elif passes_produto == 2:
-                entrada_prod = "Cabeçote Fixo"
-                saida_prod = "Cabeçote Fixo"
-                entrada_serv = "Cabeçote Móvel"
-                saida_serv = "Cabeçote Fixo"
-                configuracao = "Multi Passe Assimétrico"
-                justificativa_cabecotes = "Multi passe assimétrico com produto em 2 passes e serviço em passe simples"
+                entrada_prod = "Cabecote Fixo"
+                saida_prod = "Cabecote Fixo"
+                entrada_serv = "Cabecote Movel"
+                saida_serv = "Cabecote Fixo"
+                configuracao = "Multi Passe Assimetrico"
+                justificativa_cabecotes = "Multi passe assimetrico com produto em 2 passes e servico em passe simples"
             else:
-                entrada_prod = "Cabeçote Fixo"
-                saida_prod = "Cabeçote Móvel"
-                entrada_serv = "Cabeçote Móvel"
-                saida_serv = "Cabeçote Móvel"
-                configuracao = "Multi Passe Assimétrico"
-                justificativa_cabecotes = "Multi passe assimétrico com serviço em 2 passes e produto em passe simples"
+                entrada_prod = "Cabecote Fixo"
+                saida_prod = "Cabecote Movel"
+                entrada_serv = "Cabecote Movel"
+                saida_serv = "Cabecote Movel"
+                configuracao = "Multi Passe Assimetrico"
+                justificativa_cabecotes = "Multi passe assimetrico com servico em 2 passes e produto em passe simples"
     
-    elif tipo_passe == "Multi Seção":
-        # Multi seção permite configurações mais flexíveis
-        entrada_prod = "Cabeçote Fixo"
-        saida_prod = "Cabeçote Móvel"
-        entrada_serv = "Cabeçote Móvel"
-        saida_serv = "Cabeçote Fixo"
-        configuracao = "Multi Seção em Paralelo"
-        justificativa_cabecotes = "Multi seção configurada em paralelo para facilitar manutenção e aumentar disponibilidade"
+    elif tipo_passe == "Multi Secao":
+        # Multi secao permite configuracoes mais flexiveis
+        entrada_prod = "Cabecote Fixo"
+        saida_prod = "Cabecote Movel"
+        entrada_serv = "Cabecote Movel"
+        saida_serv = "Cabecote Fixo"
+        configuracao = "Multi Secao em Paralelo"
+        justificativa_cabecotes = "Multi secao configurada em paralelo para facilitar manutencao e aumentar disponibilidade"
     
-    # Ajustes para grandes números de placas
+    # Ajustes para grandes numeros de placas
     if placas > 150:
         if tipo_passe == "Simples":
-            entrada_prod = "Cabeçote Fixo"
-            saida_prod = "Cabeçote Móvel"
-            entrada_serv = "Cabeçote Móvel"
-            saida_serv = "Cabeçote Fixo"
-            configuracao = "Contra-corrente com Distribuidor"
-            justificativa_cabecotes = f"Grande número de placas ({placas}) recomenda distribuidores de fluxo para melhor performance"
+            if is_turbulento:
+                entrada_prod = "Cabecote Fixo"
+                saida_prod = "Cabecote Movel"
+                entrada_serv = "Cabecote Movel"
+                saida_serv = "Cabecote Fixo"
+                configuracao = "1 Passe Turbulento com Distribuidor"
+                justificativa_cabecotes = f"Grande numero de placas ({placas}) com turbulencia elevada recomenda distribuidores de fluxo"
+            else:
+                entrada_prod = "Cabecote Fixo"
+                saida_prod = "Cabecote Fixo"
+                entrada_serv = "Cabecote Fixo"
+                saida_serv = "Cabecote Fixo"
+                configuracao = "1 Passe Padrao com Distribuidor"
+                justificativa_cabecotes = f"Grande numero de placas ({placas}) recomenda distribuidores de fluxo para melhor performance"
     
-    # Ajustes específicos para semi-soldados
+    # Ajustes especificos para semi-soldados
     if tipo_modelo == "semi-soldado":
         if tipo_passe == "Multi Passe":
-            entrada_prod = "Cabeçote Fixo"
-            saida_prod = "Cabeçote Fixo"
-            entrada_serv = "Cabeçote Móvel"
-            saida_serv = "Cabeçote Móvel"
+            entrada_prod = "Cabecote Fixo"
+            saida_prod = "Cabecote Fixo"
+            entrada_serv = "Cabecote Movel"
+            saida_serv = "Cabecote Movel"
             configuracao = "Multi Passe Semi-Soldado"
-            justificativa_cabecotes = "Configuração otimizada para modelo semi-soldado com restrições de conexão"
+            justificativa_cabecotes = "Configuracao otimizada para modelo semi-soldado com restricoes de conexao"
     
     return {
         "entrada_produto": entrada_prod,
