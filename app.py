@@ -1,14 +1,13 @@
 import io
 import math
 import streamlit as st
-
-st.set_page_config(page_title="AlfaVed Engenharia - Dimensionador", page_icon="▲", layout="wide")
-
 from reportlab.lib.pagesizes import letter
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
 from reportlab.pdfgen import canvas
+
+st.set_page_config(page_title="AlfaVed Engenharia - Dimensionador", page_icon="▲", layout="wide")
 
 # ============================================================================
 # BANCO DE DADOS - MODELOS ALFA LAVAL
@@ -21,9 +20,11 @@ BANCO_MODELOS_GAXETADOS = {
     "Alfa Laval M15-B (Gaxetado)": {"tipo": "gaxetado", "linha": "BaseLine", "area_placa": 0.360, "U_base": 4700, "pressao_max": 10, "temp_max": 180, "dh": 0.008, "conexao": 'DN150 (6")', "material": "AISI 304 / 316 / Ti"},
     "Alfa Laval T20-B (Gaxetado)": {"tipo": "gaxetado", "linha": "BaseLine", "area_placa": 0.850, "U_base": 4800, "pressao_max": 10, "temp_max": 180, "dh": 0.009, "conexao": 'DN200 (8")', "material": "AISI 304 / 316 / Ti"},
     "Alfa Laval M6-M (Gaxetado)": {"tipo": "gaxetado", "linha": "M-line", "area_placa": 0.150, "U_base": 4250, "pressao_max": 25, "temp_max": 180, "dh": 0.005, "conexao": 'DN50 (2")', "material": "AISI 316 / Ti", "fda": True, "cip": True},
+    "Alfa Laval TS6M (Gaxetado)": {"tipo": "gaxetado", "linha": "M-line", "area_placa": 0.260, "U_base": 4600, "pressao_max": 25, "temp_max": 180, "dh": 0.006, "conexao": 'DN65 (2.5")', "material": "AISI 316 / Ti", "fda": True, "cip": True},
     "Alfa Laval M10-M (Gaxetado)": {"tipo": "gaxetado", "linha": "M-line", "area_placa": 0.240, "U_base": 4550, "pressao_max": 40, "temp_max": 180, "dh": 0.006, "conexao": 'DN100 (4")', "material": "AISI 316 / 254 SMO / Ti", "fda": True, "cip": True},
     "Alfa Laval M15-M (Gaxetado)": {"tipo": "gaxetado", "linha": "M-line", "area_placa": 0.360, "U_base": 4750, "pressao_max": 25, "temp_max": 180, "dh": 0.008, "conexao": 'DN150 (6")', "material": "AISI 316 / 254 SMO / Ti", "fda": True, "cip": True},
     "Alfa Laval T20-M (Gaxetado)": {"tipo": "gaxetado", "linha": "M-line", "area_placa": 0.850, "U_base": 4900, "pressao_max": 30, "temp_max": 180, "dh": 0.009, "conexao": 'DN200 (8")', "material": "AISI 316 / Ti", "fda": True, "cip": True},
+    "Alfa Laval TS20M (Gaxetado)": {"tipo": "gaxetado", "linha": "M-line", "area_placa": 0.950, "U_base": 4950, "pressao_max": 25, "temp_max": 180, "dh": 0.009, "conexao": 'DN200 (8")', "material": "AISI 316 / 254 SMO / Ti", "fda": True, "cip": True},
     "Alfa Laval MA30-S WideGap (Gaxetado)": {"tipo": "gaxetado", "linha": "WideGap", "area_placa": 1.380, "U_base": 3800, "pressao_max": 25, "temp_max": 180, "dh": 0.012, "conexao": 'DN300 (12")', "material": "AISI 316 / 254 SMO / Ti", "canal": "8/8 mm ou 11/5 mm"},
     "Alfa Laval WideGap 350 (Gaxetado)": {"tipo": "gaxetado", "linha": "WideGap", "area_placa": 1.800, "U_base": 3700, "pressao_max": 10, "temp_max": 180, "dh": 0.015, "conexao": 'DN350 (14")', "material": "AISI 316 / 254 SMO / Ti", "canal": "11/5, 17/5, 8/8 ou 11/11 mm"},
 }
@@ -60,7 +61,7 @@ BANCO_SERVICOS = {
     "Agua Gelada": {"cp": 4.18, "viscosidade": 1.3, "densidade": 1000},
     "Agua Morna": {"cp": 4.18, "viscosidade": 0.65, "densidade": 995},
     "Agua Quente": {"cp": 4.18, "viscosidade": 0.35, "densidade": 960},
-    "Vapor Saturado": {"cp": 2.0, "viscosidade": 0.015, "densidade": 0.6},
+    "Vapor Saturado": {"cp": 2.0, "viscosidade": 0.015, "densidade": 0.6, "is_vapor": True},
     "Oleo Termico": {"cp": 2.50, "viscosidade": 5.0, "densidade": 850},
     "Refrigerante R22": {"cp": 1.45, "viscosidade": 0.018, "densidade": 450},
     "Refrigerante R410A": {"cp": 1.60, "viscosidade": 0.020, "densidade": 480},
@@ -175,6 +176,22 @@ def calculate_lmtd(dt1, dt2):
         return abs((dt1_abs - dt2_abs) / math.log(dt1_abs / dt2_abs))
     return max(dt1_abs, dt2_abs, 1.0)
 
+def calcular_calor_latente_vapor(temp_vapor_c):
+    """
+    Calcula o calor latente aproximado do vapor saturado em kJ/kg
+    baseado na temperatura de condensacao.
+    """
+    if temp_vapor_c >= 120:
+        return 2200.0
+    elif temp_vapor_c >= 100:
+        return 2257.0
+    elif temp_vapor_c >= 80:
+        return 2308.0
+    elif temp_vapor_c >= 60:
+        return 2358.0
+    else:
+        return 2500.0 - (temp_vapor_c * 5.43)
+
 def calculate_dimensionamento(produto, dados_fluido, modelo, dados_modelo,
                               t_in_prod, t_out_prod, t_in_serv, t_out_serv,
                               vazao_prod, dados_servico):
@@ -188,12 +205,29 @@ def calculate_dimensionamento(produto, dados_fluido, modelo, dados_modelo,
     pressao_max = dados_modelo.get('pressao_max', 25)
     dh = dados_modelo.get('dh', 0.005)
 
+    is_vapor = dados_servico.get('is_vapor', False)
+
     reynolds_prod = calculate_reynolds(vazao_prod, viscosidade_prod, densidade_prod, dh)
     dT_prod = abs(t_in_prod - t_out_prod)
     carga_kw = (vazao_prod * cp_prod * dT_prod) / 3600.0
 
-    delta_t_serv = abs(t_out_serv - t_in_serv)
-    vazao_serv = (carga_kw * 3600.0) / (cp_serv * delta_t_serv) if delta_t_serv > 0 else 0.0
+    # ============================================================================
+    # CALCULO DE VAPOR EM KG/H
+    # ============================================================================
+    if is_vapor:
+        # Para vapor, o fluido entra como vapor e sai como condensado (ou mistura)
+        # Calor latente baseado na temperatura de entrada do vapor
+        h_fg = calcular_calor_latente_vapor(t_in_serv)
+        # Q = m_dot * h_fg => m_dot = Q / h_fg
+        vazao_serv = (carga_kw * 3600.0) / h_fg
+        # Temperatura de saida do vapor e aproximadamente a temp de condensacao
+        # (assumindo condensacao isotermica ou com sub-resfriamento leve)
+        t_out_serv_calculado = t_in_serv
+    else:
+        delta_t_serv = abs(t_out_serv - t_in_serv)
+        vazao_serv = (carga_kw * 3600.0) / (cp_serv * delta_t_serv) if delta_t_serv > 0 else 0.0
+        t_out_serv_calculado = t_out_serv
+
     reynolds_serv = calculate_reynolds(vazao_serv, viscosidade_serv, densidade_serv, dh)
 
     regime_prod, desc_prod = classificar_turbulencia(reynolds_prod)
@@ -205,7 +239,7 @@ def calculate_dimensionamento(produto, dados_fluido, modelo, dados_modelo,
     fator_viscosidade = get_viscosity_factor(dados_fluido)
     U_adotado = dados_modelo['U_base'] * fator_viscosidade * multiplicador_u
 
-    dt1 = t_in_prod - t_out_serv
+    dt1 = t_in_prod - t_out_serv_calculado
     dt2 = t_out_prod - t_in_serv
     lmtd = calculate_lmtd(dt1, dt2)
 
@@ -217,6 +251,7 @@ def calculate_dimensionamento(produto, dados_fluido, modelo, dados_modelo,
     return {
         'carga_kw': carga_kw,
         'vazao_serv': vazao_serv,
+        'vapor_kg_h': vazao_serv if is_vapor else 0.0,
         'lmtd': lmtd,
         'area_m2': area_m2,
         'placas': placas,
@@ -233,6 +268,9 @@ def calculate_dimensionamento(produto, dados_fluido, modelo, dados_modelo,
         'desc_serv': desc_serv,
         'tipo_placa': tipo_placa,
         'justificativa_placa': justificativa_angulo,
+        'is_vapor': is_vapor,
+        't_out_serv_calculado': t_out_serv_calculado,
+        'h_fg_vapor': calcular_calor_latente_vapor(t_in_serv) if is_vapor else 0.0,
         'linha_modelo': dados_modelo.get('linha', 'N/A'),
         'conexao': dados_modelo.get('conexao', 'N/A'),
         'material_modelo': dados_modelo.get('material', 'N/A'),
@@ -278,8 +316,8 @@ def build_pdf(modelo, tag, projeto, produto, servico,
         [Paragraph('Propriedade', st_th), Paragraph('Lado do Produto', st_th), Paragraph('Lado do Servico', st_th)],
         [Paragraph('Fluido', st_tc), Paragraph(produto, st_tc), Paragraph(servico, st_tc)],
         [Paragraph('Temp Entrada', st_tc), Paragraph(f'{t_in_prod} C', st_tc), Paragraph(f'{t_in_serv} C', st_tc)],
-        [Paragraph('Temp Saida', st_tc), Paragraph(f'{t_out_prod} C', st_tc), Paragraph(f'{t_out_serv} C', st_tc)],
-        [Paragraph('Vazao Massica', st_tc), Paragraph(f'{vazao_prod} kg/h', st_tc), Paragraph(f'{vazao_serv:.1f} kg/h', st_tc)],
+        [Paragraph('Temp Saida', st_tc), Paragraph(f'{t_out_prod} C', st_tc), Paragraph(f'{resultados["t_out_serv_calculado"]:.1f} C {"(condensacao)" if resultados["is_vapor"] else ""}', st_tc)],
+        [Paragraph('Vazao Massica', st_tc), Paragraph(f'{vazao_prod} kg/h', st_tc), Paragraph(f'{vazao_serv:.1f} kg/h {"(VAPOR)" if resultados["is_vapor"] else ""}', st_tc)],
     ])
     t2.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#0d1b2a')),
@@ -324,7 +362,7 @@ def build_pdf(modelo, tag, projeto, produto, servico,
     story.append(t4)
 
     story.append(Paragraph('5. Resultados do Dimensionamento Hidro-Termico', st_h2))
-    t5 = Table([
+    t5_data = [
         [Paragraph('Grandeza de Engenharia', st_th), Paragraph('Valor Calculado', st_th)],
         [Paragraph('Carga Termica', st_tc), Paragraph(f'{resultados["carga_kw"]:.2f} kW', st_tc)],
         [Paragraph('LMTD', st_tc), Paragraph(f'{resultados["lmtd"]:.2f} C', st_tc)],
@@ -335,7 +373,13 @@ def build_pdf(modelo, tag, projeto, produto, servico,
         [Paragraph('Area Efetiva Requerida', st_tc), Paragraph(f'{resultados["area_m2"]:.2f} m2', st_tc)],
         [Paragraph('Area por Placa', st_tc), Paragraph(f'{resultados["area_por_placa"]} m2', st_tc)],
         [Paragraph('Quantidade de Placas', st_tc), Paragraph(f'{resultados["placas"]} placas', st_tc)],
-    ])
+    ]
+
+    if resultados['is_vapor']:
+        t5_data.append([Paragraph('Consumo Vapor', st_tc), Paragraph(f'{resultados["vapor_kg_h"]:.2f} kg/h', st_tc)])
+        t5_data.append([Paragraph('Calor Latente Vapor', st_tc), Paragraph(f'{resultados["h_fg_vapor"]:.1f} kJ/kg', st_tc)])
+
+    t5 = Table(t5_data)
     t5.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#0d1b2a')),
         ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#cccccc')),
@@ -384,6 +428,7 @@ def main():
     .datasheet-preview { background: #ffffff; border: 1px solid #ddd; padding: 20px; border-radius: 8px; margin-top: 10px; }
     .datasheet-section { margin-bottom: 20px; }
     .datasheet-section h4 { color: #003049; border-bottom: 2px solid #003049; padding-bottom: 5px; margin-bottom: 10px; }
+    .vapor-alert { background: linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%); color: white; padding: 15px; border-radius: 8px; text-align: center; font-weight: bold; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -391,7 +436,7 @@ def main():
     <div class="main-header">
         <h1>AlfaVed Engenharia Termica</h1>
         <h3>Dimensionador Inteligente de Trocadores de Calor</h3>
-        <p>Banco Alfa Laval | B/M Variants | H=45 L=60 | Semi-Soldadas | WideGap</p>
+        <p>Banco Alfa Laval | TS6M / TS20M | Vapor kg/h | H=45 L=60 | Semi-Soldadas | WideGap</p>
     </div>
     """, unsafe_allow_html=True)
 
@@ -498,6 +543,11 @@ def main():
                 st.metric('Quantidade Placas', f'{resultados["placas"]}')
                 st.markdown('</div>', unsafe_allow_html=True)
 
+            if resultados['is_vapor']:
+                st.markdown('<div class="vapor-alert">', unsafe_allow_html=True)
+                st.metric('Consumo de Vapor', f'{resultados["vapor_kg_h"]:.2f} kg/h', f'hfg = {resultados["h_fg_vapor"]:.1f} kJ/kg')
+                st.markdown('</div>', unsafe_allow_html=True)
+
             st.divider()
             st.markdown('#### Analise de Turbulencia')
             turb_col1, turb_col2 = st.columns(2)
@@ -583,23 +633,29 @@ def main():
                     'Temp Entrada Produto': f"{st.session_state.get('t_in_prod_res', 0)} C",
                     'Temp Saida Produto': f"{st.session_state.get('t_out_prod_res', 0)} C",
                     'Temp Entrada Servico': f"{st.session_state.get('t_in_serv_res', 0)} C",
-                    'Temp Saida Servico': f"{st.session_state.get('t_out_serv_res', 0)} C",
+                    'Temp Saida Servico': f"{resultados['t_out_serv_calculado']:.1f} C {'(condensacao)' if resultados['is_vapor'] else ''}",
                     'Vazao Produto': f"{st.session_state.get('vazao_prod_res', 0)} kg/h",
-                    'Vazao Servico': f"{resultados['vazao_serv']:.1f} kg/h",
+                    'Vazao Servico': f"{resultados['vazao_serv']:.1f} kg/h {'(VAPOR)' if resultados['is_vapor'] else ''}",
                 }
                 for k, v in op_data.items():
                     st.write(f"**{k}:** {v}")
 
-                st.markdown('<div class="datasheet-section"><h4>3. Analise de Turbulencia</h4></div>', unsafe_allow_html=True)
+                if resultados['is_vapor']:
+                    st.markdown('<div class="datasheet-section"><h4>3. Dados do Vapor</h4></div>', unsafe_allow_html=True)
+                    st.write(f"**Consumo de Vapor:** {resultados['vapor_kg_h']:.2f} kg/h")
+                    st.write(f"**Calor Latente (hfg):** {resultados['h_fg_vapor']:.1f} kJ/kg")
+                    st.write(f"**Temperatura de Condensacao:** {resultados['t_out_serv_calculado']:.1f} C")
+
+                st.markdown('<div class="datasheet-section"><h4>4. Analise de Turbulencia</h4></div>', unsafe_allow_html=True)
                 st.write(f"**Reynolds Produto:** {resultados['reynolds_prod']:.0f} ({resultados['regime_prod']})")
                 st.write(f"**Reynolds Servico:** {resultados['reynolds_serv']:.0f} ({resultados['regime_serv']})")
 
-                st.markdown('<div class="datasheet-section"><h4>4. Configuracao de Placa</h4></div>', unsafe_allow_html=True)
+                st.markdown('<div class="datasheet-section"><h4>5. Configuracao de Placa</h4></div>', unsafe_allow_html=True)
                 st.write(f"**Tipo:** {resultados['tipo_placa']}")
                 st.write(f"**Descricao:** {placa_info['descricao']}")
                 st.write(f"**Combinacoes:** {placa_info.get('combinacoes', 'HH/HL/LL')}")
 
-                st.markdown('<div class="datasheet-section"><h4>5. Resultados do Dimensionamento</h4></div>', unsafe_allow_html=True)
+                st.markdown('<div class="datasheet-section"><h4>6. Resultados do Dimensionamento</h4></div>', unsafe_allow_html=True)
                 st.write(f"**Carga Termica:** {resultados['carga_kw']:.2f} kW")
                 st.write(f"**LMTD:** {resultados['lmtd']:.2f} C")
                 st.write(f"**U Base:** {resultados['U_base']:.0f} W/m2K")
@@ -608,7 +664,7 @@ def main():
                 st.write(f"**Area por Placa:** {resultados['area_por_placa']} m2")
                 st.write(f"**Quantidade de Placas:** {resultados['placas']} placas")
 
-                st.markdown('<div class="datasheet-section"><h4>6. Responsaveis Tecnicos</h4></div>', unsafe_allow_html=True)
+                st.markdown('<div class="datasheet-section"><h4>7. Responsaveis Tecnicos</h4></div>', unsafe_allow_html=True)
                 st.write("**Vitor Soares** - Responsavel pelo Projeto")
                 st.write("E-mail: engenharia@alfaved.com.br | Tel: (18) 9.9669-7330")
                 st.write("")
