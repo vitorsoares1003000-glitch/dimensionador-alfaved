@@ -1,5 +1,5 @@
 """
-AlfaVed Engenharia Térmica - Dimensionador PHE
+AlfaVed Engenharia Térmica - Dimensionador PHE v2.0
 Arquivo: app.py
 Deploy: streamlit run app.py
 """
@@ -12,7 +12,7 @@ from datetime import datetime
 # ReportLab para PDF
 from reportlab.lib.pagesizes import A4
 from reportlab.platypus import (
-    SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, PageBreak
+    SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
 )
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
@@ -23,92 +23,275 @@ from reportlab.lib.units import cm
 # ============================================================================
 
 BANCO_MODELOS = {
-    "M3": {"area": 0.03, "U": 3800, "Pmax": 16, "Tmax": 180, "dh": 0.003, "conn": "1.25\"", "cat": "Gaxetado"},
-    "M6-B": {"area": 0.15, "U": 4200, "Pmax": 10, "Tmax": 180, "dh": 0.005, "conn": "2\"", "cat": "Gaxetado"},
-    "TS6M": {"area": 0.26, "U": 4600, "Pmax": 25, "Tmax": 180, "dh": 0.006, "conn": "2.5\"", "cat": "Gaxetado"},
-    "M10-B": {"area": 0.24, "U": 4500, "Pmax": 10, "Tmax": 180, "dh": 0.006, "conn": "4\"", "cat": "Gaxetado"},
-    "TS20M": {"area": 0.95, "U": 4950, "Pmax": 25, "Tmax": 180, "dh": 0.009, "conn": "8\"", "cat": "Gaxetado"},
-    "T20-B": {"area": 0.85, "U": 4800, "Pmax": 10, "Tmax": 180, "dh": 0.009, "conn": "8\"", "cat": "Gaxetado"},
-    "M15-B": {"area": 0.36, "U": 4700, "Pmax": 10, "Tmax": 180, "dh": 0.008, "conn": "6\"", "cat": "Gaxetado"},
-    "MA30-S WideGap": {"area": 1.38, "U": 3800, "Pmax": 25, "Tmax": 180, "dh": 0.012, "conn": "12\"", "cat": "WideGap"},
-    "WideGap 350": {"area": 1.80, "U": 3700, "Pmax": 10, "Tmax": 180, "dh": 0.015, "conn": "14\"", "cat": "WideGap"},
-    "M6-M": {"area": 0.15, "U": 4250, "Pmax": 25, "Tmax": 180, "dh": 0.005, "conn": "2\"", "cat": "M-Line"},
-    "M10-M": {"area": 0.24, "U": 4550, "Pmax": 40, "Tmax": 180, "dh": 0.006, "conn": "4\"", "cat": "M-Line"},
-    "M15-M": {"area": 0.36, "U": 4750, "Pmax": 25, "Tmax": 180, "dh": 0.008, "conn": "6\"", "cat": "M-Line"},
-    "T20-M": {"area": 0.85, "U": 4900, "Pmax": 30, "Tmax": 180, "dh": 0.009, "conn": "8\"", "cat": "M-Line"},
-    "M10-BW": {"area": 0.24, "U": 4600, "Pmax": 55, "Tmax": 250, "dh": 0.005, "conn": "4\"", "cat": "Semi-Soldado"},
-    "MK15-BW": {"area": 0.42, "U": 4650, "Pmax": 41, "Tmax": 200, "dh": 0.006, "conn": "6\"", "cat": "Semi-Soldado"},
-    "TK20-BW": {"area": 0.68, "U": 4700, "Pmax": 63, "Tmax": 200, "dh": 0.006, "conn": "8\"", "cat": "Semi-Soldado"},
-    "T20-W": {"area": 0.85, "U": 4800, "Pmax": 30, "Tmax": 180, "dh": 0.009, "conn": "8\"", "cat": "Semi-Soldado"},
-    "MA30-W": {"area": 1.40, "U": 4900, "Pmax": 40, "Tmax": 180, "dh": 0.010, "conn": "12\"", "cat": "Semi-Soldado"},
+    "M3": {"area": 0.03, "Pmax": 16, "Tmax": 180, "dh": 0.003, "conn": "1.25\"", "cat": "Gaxetado", "placa_larg": 0.08, "placa_comp": 0.25, "canal_larg": 0.07, "esp": 0.0015},
+    "M6-B": {"area": 0.15, "Pmax": 10, "Tmax": 180, "dh": 0.005, "conn": "2\"", "cat": "Gaxetado", "placa_larg": 0.15, "placa_comp": 0.40, "canal_larg": 0.14, "esp": 0.0020},
+    "TS6M": {"area": 0.26, "Pmax": 25, "Tmax": 180, "dh": 0.006, "conn": "2.5\"", "cat": "Gaxetado", "placa_larg": 0.18, "placa_comp": 0.52, "canal_larg": 0.17, "esp": 0.0025},
+    "M10-B": {"area": 0.24, "Pmax": 10, "Tmax": 180, "dh": 0.006, "conn": "4\"", "cat": "Gaxetado", "placa_larg": 0.25, "placa_comp": 0.50, "canal_larg": 0.24, "esp": 0.0025},
+    "TS20M": {"area": 0.95, "Pmax": 25, "Tmax": 180, "dh": 0.009, "conn": "8\"", "cat": "Gaxetado", "placa_larg": 0.45, "placa_comp": 0.75, "canal_larg": 0.43, "esp": 0.0030},
+    "T20-B": {"area": 0.85, "Pmax": 10, "Tmax": 180, "dh": 0.009, "conn": "8\"", "cat": "Gaxetado", "placa_larg": 0.45, "placa_comp": 0.75, "canal_larg": 0.43, "esp": 0.0030},
+    "M15-B": {"area": 0.36, "Pmax": 10, "Tmax": 180, "dh": 0.008, "conn": "6\"", "cat": "Gaxetado", "placa_larg": 0.35, "placa_comp": 0.60, "canal_larg": 0.33, "esp": 0.0030},
+    "MA30-S WideGap": {"area": 1.38, "Pmax": 25, "Tmax": 180, "dh": 0.012, "conn": "12\"", "cat": "WideGap", "placa_larg": 0.70, "placa_comp": 1.00, "canal_larg": 0.65, "esp": 0.0050},
+    "WideGap 350": {"area": 1.80, "Pmax": 10, "Tmax": 180, "dh": 0.015, "conn": "14\"", "cat": "WideGap", "placa_larg": 0.80, "placa_comp": 1.10, "canal_larg": 0.75, "esp": 0.0060},
+    "M6-M": {"area": 0.15, "Pmax": 25, "Tmax": 180, "dh": 0.005, "conn": "2\"", "cat": "M-Line", "placa_larg": 0.15, "placa_comp": 0.40, "canal_larg": 0.14, "esp": 0.0020},
+    "M10-M": {"area": 0.24, "Pmax": 40, "Tmax": 180, "dh": 0.006, "conn": "4\"", "cat": "M-Line", "placa_larg": 0.25, "placa_comp": 0.50, "canal_larg": 0.24, "esp": 0.0025},
+    "M15-M": {"area": 0.36, "Pmax": 25, "Tmax": 180, "dh": 0.008, "conn": "6\"", "cat": "M-Line", "placa_larg": 0.35, "placa_comp": 0.60, "canal_larg": 0.33, "esp": 0.0030},
+    "T20-M": {"area": 0.85, "Pmax": 30, "Tmax": 180, "dh": 0.009, "conn": "8\"", "cat": "M-Line", "placa_larg": 0.45, "placa_comp": 0.75, "canal_larg": 0.43, "esp": 0.0030},
+    "M10-BW": {"area": 0.24, "Pmax": 55, "Tmax": 250, "dh": 0.005, "conn": "4\"", "cat": "Semi-Soldado", "placa_larg": 0.25, "placa_comp": 0.50, "canal_larg": 0.24, "esp": 0.0025},
+    "MK15-BW": {"area": 0.42, "Pmax": 41, "Tmax": 200, "dh": 0.006, "conn": "6\"", "cat": "Semi-Soldado", "placa_larg": 0.35, "placa_comp": 0.60, "canal_larg": 0.33, "esp": 0.0030},
+    "TK20-BW": {"area": 0.68, "Pmax": 63, "Tmax": 200, "dh": 0.006, "conn": "8\"", "cat": "Semi-Soldado", "placa_larg": 0.45, "placa_comp": 0.75, "canal_larg": 0.43, "esp": 0.0030},
+    "T20-W": {"area": 0.85, "Pmax": 30, "Tmax": 180, "dh": 0.009, "conn": "8\"", "cat": "Semi-Soldado", "placa_larg": 0.45, "placa_comp": 0.75, "canal_larg": 0.43, "esp": 0.0030},
+    "MA30-W": {"area": 1.40, "Pmax": 40, "Tmax": 180, "dh": 0.010, "conn": "12\"", "cat": "Semi-Soldado", "placa_larg": 0.70, "placa_comp": 1.00, "canal_larg": 0.65, "esp": 0.0040},
 }
 
 BANCO_FLUIDOS = {
-    "Agua": {"cp": 4.18, "visc": 0.89, "dens": 1000, "tipo": "base"},
-    "Leite Integral": {"cp": 3.89, "visc": 2.1, "dens": 1030, "tipo": "alimento"},
-    "Leite Desnatado": {"cp": 3.95, "visc": 1.5, "dens": 1020, "tipo": "alimento"},
-    "Suco de Laranja": {"cp": 3.75, "visc": 3.5, "dens": 1040, "tipo": "alimento"},
-    "Suco de Maca": {"cp": 3.70, "visc": 2.8, "dens": 1035, "tipo": "alimento"},
-    "Oleo Vegetal": {"cp": 1.97, "visc": 50.0, "dens": 920, "tipo": "oleo"},
-    "Oleo Mineral": {"cp": 1.88, "visc": 100.0, "dens": 880, "tipo": "oleo"},
-    "Melado": {"cp": 2.80, "visc": 150.0, "dens": 1380, "tipo": "viscoso"},
-    "Cerveja": {"cp": 4.10, "visc": 1.5, "dens": 1010, "tipo": "alimento"},
-    "Vinho": {"cp": 3.85, "visc": 1.2, "dens": 1000, "tipo": "alimento"},
-    "Chocolate Quente": {"cp": 3.50, "visc": 8.0, "dens": 1050, "tipo": "alimento"},
-    "Polpa de Fruta": {"cp": 3.60, "visc": 5.0, "dens": 1050, "tipo": "alimento"},
-    "Soro de Leite": {"cp": 3.95, "visc": 1.2, "dens": 1025, "tipo": "alimento"},
-    "Creme de Leite": {"cp": 3.50, "visc": 12.0, "dens": 980, "tipo": "alimento"},
-    "Iogurte": {"cp": 3.70, "visc": 25.0, "dens": 1060, "tipo": "alimento"},
-    "Nata": {"cp": 3.40, "visc": 15.0, "dens": 970, "tipo": "alimento"},
-    "Manteiga Derretida": {"cp": 2.10, "visc": 40.0, "dens": 910, "tipo": "oleo"},
+    "Agua": {"cp": 4180, "visc": 0.00089, "dens": 1000, "cond": 0.60, "tipo": "base"},
+    "Leite Integral": {"cp": 3890, "visc": 0.00210, "dens": 1030, "cond": 0.55, "tipo": "alimento"},
+    "Leite Desnatado": {"cp": 3950, "visc": 0.00150, "dens": 1020, "cond": 0.57, "tipo": "alimento"},
+    "Suco de Laranja": {"cp": 3750, "visc": 0.00350, "dens": 1040, "cond": 0.54, "tipo": "alimento"},
+    "Suco de Maca": {"cp": 3700, "visc": 0.00280, "dens": 1035, "cond": 0.55, "tipo": "alimento"},
+    "Oleo Vegetal": {"cp": 1970, "visc": 0.0500, "dens": 920, "cond": 0.17, "tipo": "oleo"},
+    "Oleo Mineral": {"cp": 1880, "visc": 0.1000, "dens": 880, "cond": 0.15, "tipo": "oleo"},
+    "Melado": {"cp": 2800, "visc": 0.1500, "dens": 1380, "cond": 0.50, "tipo": "viscoso"},
+    "Cerveja": {"cp": 4100, "visc": 0.00150, "dens": 1010, "cond": 0.58, "tipo": "alimento"},
+    "Vinho": {"cp": 3850, "visc": 0.00120, "dens": 1000, "cond": 0.56, "tipo": "alimento"},
+    "Chocolate Quente": {"cp": 3500, "visc": 0.00800, "dens": 1050, "cond": 0.52, "tipo": "alimento"},
+    "Polpa de Fruta": {"cp": 3600, "visc": 0.00500, "dens": 1050, "cond": 0.53, "tipo": "alimento"},
+    "Soro de Leite": {"cp": 3950, "visc": 0.00120, "dens": 1025, "cond": 0.57, "tipo": "alimento"},
+    "Creme de Leite": {"cp": 3500, "visc": 0.01200, "dens": 980, "cond": 0.45, "tipo": "alimento"},
+    "Iogurte": {"cp": 3700, "visc": 0.02500, "dens": 1060, "cond": 0.50, "tipo": "alimento"},
+    "Nata": {"cp": 3400, "visc": 0.01500, "dens": 970, "cond": 0.42, "tipo": "alimento"},
+    "Manteiga Derretida": {"cp": 2100, "visc": 0.04000, "dens": 910, "cond": 0.18, "tipo": "oleo"},
 }
 
 BANCO_SERVICOS = {
-    "Agua Fria": {"cp": 4.18, "visc": 0.89, "dens": 1000, "tipo": "base"},
-    "Agua Gelada": {"cp": 4.18, "visc": 1.3, "dens": 1000, "tipo": "base"},
-    "Agua Morna": {"cp": 4.18, "visc": 0.65, "dens": 995, "tipo": "base"},
-    "Agua Quente": {"cp": 4.18, "visc": 0.35, "dens": 960, "tipo": "base"},
-    "Vapor Saturado": {"cp": 2.0, "visc": 0.015, "dens": 0.6, "tipo": "vapor"},
-    "Oleo Termico": {"cp": 2.50, "visc": 5.0, "dens": 850, "tipo": "oleo"},
-    "Refrigerante R22": {"cp": 1.45, "visc": 0.018, "dens": 450, "tipo": "gas"},
-    "R410A": {"cp": 1.60, "visc": 0.020, "dens": 480, "tipo": "gas"},
-    "R134a": {"cp": 1.52, "visc": 0.019, "dens": 470, "tipo": "gas"},
-    "R717 (NH3)": {"cp": 4.70, "visc": 0.25, "dens": 682, "tipo": "gas"},
-    "R744 (CO2)": {"cp": 3.50, "visc": 0.07, "dens": 1100, "tipo": "gas"},
-    "Ar Comprimido": {"cp": 1.01, "visc": 0.018, "dens": 1.2, "tipo": "gas"},
-    "Glicol 30%": {"cp": 3.70, "visc": 3.5, "dens": 1040, "tipo": "base"},
-    "Glicol 50%": {"cp": 3.50, "visc": 6.0, "dens": 1070, "tipo": "base"},
+    "Agua Fria": {"cp": 4180, "visc": 0.00089, "dens": 1000, "cond": 0.60, "tipo": "base"},
+    "Agua Gelada": {"cp": 4180, "visc": 0.00130, "dens": 1000, "cond": 0.58, "tipo": "base"},
+    "Agua Morna": {"cp": 4180, "visc": 0.00065, "dens": 995, "cond": 0.61, "tipo": "base"},
+    "Agua Quente": {"cp": 4180, "visc": 0.00035, "dens": 960, "cond": 0.68, "tipo": "base"},
+    "Vapor Saturado": {"cp": 2000, "visc": 0.000015, "dens": 0.60, "cond": 0.025, "tipo": "vapor"},
+    "Oleo Termico": {"cp": 2500, "visc": 0.00500, "dens": 850, "cond": 0.13, "tipo": "oleo"},
+    "Refrigerante R22": {"cp": 1450, "visc": 0.000018, "dens": 450, "cond": 0.09, "tipo": "gas"},
+    "R410A": {"cp": 1600, "visc": 0.000020, "dens": 480, "cond": 0.10, "tipo": "gas"},
+    "R134a": {"cp": 1520, "visc": 0.000019, "dens": 470, "cond": 0.095, "tipo": "gas"},
+    "R717 (NH3)": {"cp": 4700, "visc": 0.00025, "dens": 682, "cond": 0.50, "tipo": "gas"},
+    "R744 (CO2)": {"cp": 3500, "visc": 0.00007, "dens": 1100, "cond": 0.12, "tipo": "gas"},
+    "Ar Comprimido": {"cp": 1010, "visc": 0.000018, "dens": 1.20, "cond": 0.026, "tipo": "gas"},
+    "Glicol 30%": {"cp": 3700, "visc": 0.00350, "dens": 1040, "cond": 0.50, "tipo": "base"},
+    "Glicol 50%": {"cp": 3500, "visc": 0.00600, "dens": 1070, "cond": 0.46, "tipo": "base"},
 }
 
 # ============================================================================
-# FUNÇÕES DE ENGENHARIA
+# FUNÇÕES DE ENGENHARIA REVISADAS
 # ============================================================================
 
 def get_calor_latente(temp):
-    if temp >= 150:
-        return 2114.0
-    if temp >= 130:
-        return 2174.0
-    if temp >= 110:
-        return 2230.0
-    if temp >= 100:
-        return 2257.0
-    if temp >= 80:
-        return 2308.0
+    """Calor latente de vaporização da água (kJ/kg) por temperatura."""
+    if temp >= 150: return 2114.0
+    if temp >= 130: return 2174.0
+    if temp >= 110: return 2230.0
+    if temp >= 100: return 2257.0
+    if temp >= 80: return 2308.0
     return 2358.0
 
-def calc_reynolds(vazao_kgh, visc_cp, dens_kgm3, dh_m):
-    """Calcula Reynolds aproximado."""
-    if vazao_kgh <= 0 or visc_cp <= 0 or dens_kgm3 <= 0:
+def calc_reynolds_real(vazao_kgh, visc_pas, dens_kgm3, dh_m, canal_larg_m, n_placas, arranjo):
+    """
+    Cálculo real de Reynolds considerando geometria do trocador.
+    n_placas: total de placas
+    Canais por lado = n_placas // 2 (aproximado)
+    """
+    if vazao_kgh <= 0 or visc_pas <= 0 or dens_kgm3 <= 0:
         return 0.0
-    vazao_kgs = vazao_kgh / 3600.0
-    area_canal = 0.0001  # simplificação para estimativa inicial
-    u = vazao_kgs / (dens_kgm3 * area_canal)
-    visc_pas = visc_cp * 0.001
+    
+    # Número de canais por lado (metade das placas formam canais para cada fluido)
+    canais_por_lado = max(1, (n_placas - 1) // 2)
+    
+    # Vazão mássica por canal (kg/s por canal)
+    vazao_kgs_total = vazao_kgh / 3600.0
+    vazao_por_canal = vazao_kgs_total / canais_por_lado
+    
+    # Área de fluxo de um canal = largura do canal × espaçamento da placa
+    # Espaçamento aproximado = dh/2 para placas corrugadas
+    espacamento = dh_m / 2.0
+    area_fluxo = canal_larg_m * espacamento
+    
+    if area_fluxo <= 0:
+        return 0.0
+    
+    # Velocidade massica (kg/(m²·s)) ou velocidade real
+    G = vazao_por_canal / area_fluxo  # fluxo mássico por área
+    u = vazao_por_canal / (dens_kgm3 * area_fluxo)  # velocidade real (m/s)
+    
+    # Reynolds = (densidade × velocidade × dh) / viscosidade
+    # Ou equivalente: (G × dh) / viscosidade
     re = (dens_kgm3 * u * dh_m) / visc_pas
     return max(0.0, re)
 
+def calc_prandtl(cp_jkgk, visc_pas, cond_wm2k):
+    """Número de Prandtl = viscosidade × cp / condutividade."""
+    if cond_wm2k <= 0 or visc_pas <= 0:
+        return 0.0
+    pr = (visc_pas * cp_jkgk) / cond_wm2k
+    return pr
+
+def calc_nusselt_placa(re, pr, angulo):
+    """
+    Correlação de Nusselt para trocadores de calor a placas corrugadas.
+    Baseado em correlações empíricas para placas Alfa Laval.
+    """
+    if re <= 0 or pr <= 0:
+        return 5.0
+    
+    # Constantes dependendo do ângulo de corrugação
+    if "H" in angulo:  # High angle, maior turbulência
+        C = 0.3
+        m = 0.663
+        n = 0.333
+    elif "L" in angulo:  # Low angle, menor turbulência
+        C = 0.14
+        m = 0.651
+        n = 0.333
+    else:  # Misto ou automático
+        C = 0.2
+        m = 0.658
+        n = 0.333
+    
+    if re < 20:  # Regime laminar
+        nu = 0.55 * (re ** 0.25) * (pr ** n)
+    elif re < 10000:  # Regime de transição
+        nu = C * (re ** m) * (pr ** n)
+    else:  # Regime turbulento
+        nu = C * (re ** m) * (pr ** n)
+    
+    # Correção para propriedades variáveis (viscosidade na parede diferente)
+    # Simplificação: não aplicamos correção de viscosidade aqui
+    return max(3.0, nu)
+
+def calc_h_coef(nu, cond_wm2k, dh_m):
+    """Coeficiente convectivo de transferência de calor (W/m²K)."""
+    if dh_m <= 0:
+        return 0.0
+    return (nu * cond_wm2k) / dh_m
+
+def calc_u_global(h_p, h_s, esp_placa=0.0005, k_placa=17.0, r_fouling_p=0.0001, r_fouling_s=0.0001):
+    """
+    Cálculo real do coeficiente global U considerando:
+    - Resistência convectiva do produto (1/h_p)
+    - Resistência da placa (esp/k)
+    - Resistência convectiva do serviço (1/h_s)
+    - Resistências de fouling (incrustação)
+    
+    Retorna U em W/m²K
+    """
+    if h_p <= 0 or h_s <= 0:
+        return 0.0
+    
+    # Resistências térmicas totais (m²K/W)
+    r_total = (1.0 / h_p) + r_fouling_p + (esp_placa / k_placa) + r_fouling_s + (1.0 / h_s)
+    
+    if r_total <= 0:
+        return 0.0
+    
+    U = 1.0 / r_total
+    return U
+
+def calc_lmtd(t1_ent, t1_sai, t2_ent, t2_sai, fluxo="contra"):
+    """
+    Cálculo correto do LMTD.
+    
+    t1: temperaturas do fluido quente (entrada, saída)
+    t2: temperaturas do fluido frio (entrada, saída)
+    fluxo: "contra" (contra-corrente) ou "co" (co-corrente)
+    """
+    if fluxo == "co":
+        # Co-corrente: ambos fluidos entram pelo mesmo lado
+        dt1 = abs(t1_ent - t2_ent)
+        dt2 = abs(t1_sai - t2_sai)
+    else:
+        # Contra-corrente: fluidos entram em lados opostos
+        dt1 = abs(t1_ent - t2_sai)
+        dt2 = abs(t1_sai - t2_ent)
+    
+    # Evitar divisão por zero
+    if dt1 <= 0 or dt2 <= 0:
+        return 0.1
+    
+    if abs(dt1 - dt2) < 0.001:
+        return dt1  # Diferenças iguais, LMTD = dt
+    
+    lmtd = (dt1 - dt2) / math.log(dt1 / dt2)
+    return lmtd
+
+def calc_fator_f(P, R, n_passes):
+    """
+    Fator de correção F para LMTD em arranjos multi-passe.
+    
+    P = (t_saida - t_entrada) / (T_entrada - t_entrada)  - efetividade térmica
+    R = (T_entrada - T_saida) / (t_saida - t_entrada)    - razão de capacidade
+    n_passes: número de passes (1 ou 2)
+    
+    Para 1/1 (contra-corrente puro): F = 1.0
+    Para 2/2: usa correlação aproximada para shell-and-tube adaptada
+    """
+    if n_passes == 1:
+        return 1.0
+    
+    # Limites para estabilidade numérica
+    P = max(0.001, min(0.999, P))
+    R = max(0.001, R)
+    
+    if R == 1.0:
+        P1 = P / n_passes
+    else:
+        P1 = (1.0 - ((1.0 - P * R) / (1.0 - P)) ** (1.0 / n_passes)) / R
+    
+    # Correlação simplificada para 2 passes (aproximação de Bowman-Mueller-Nagle)
+    # Para contra-corrente com 2 passes em ambos lados
+    S = (P1 * R) ** 0.5
+    
+    # Fator F aproximado (simplificado para PHE 2/2)
+    if S >= 1.0:
+        return 0.95
+    
+    # Fórmula aproximada para 2-2
+    num = S * math.log((2.0 - P1 * (1.0 + R - S)) / (2.0 - P1 * (1.0 + R + S)))
+    den = (2.0 - P1 * (1.0 + R - S)) * math.log((2.0 - P1 * (1.0 + R - S)) / (2.0 - P1 * (1.0 + R + S)))
+    
+    if den == 0:
+        return 0.9
+    
+    F = num / den
+    return max(0.5, min(1.0, F))
+
+def calc_area(Q_w, U, lmtd, F=1.0):
+    """Área de transferência de calor (m²)."""
+    if U <= 0 or lmtd <= 0 or F <= 0:
+        return 0.0
+    A = Q_w / (U * lmtd * F)
+    return A
+
+def calc_vazao_servico(Q_w, cp_jkgk, dt):
+    """Vazão mássica do serviço (kg/h)."""
+    if cp_jkgk <= 0 or dt <= 0:
+        return 0.0
+    # Q = m_dot * cp * dt  =>  m_dot = Q / (cp * dt)
+    m_dot_kgs = Q_w / (cp_jkgk * dt)
+    return m_dot_kgs * 3600.0
+
+def calc_num_placas(area_total, area_placa):
+    """Número de placas necessárias."""
+    if area_placa <= 0:
+        return 0
+    n = math.ceil(area_total / area_placa)
+    # Mínimo: 3 placas (1+1 para cada fluido + 1 de transição)
+    if n < 3:
+        n = 3
+    # Para PHE, número ímpar é preferível para balanceamento
+    if n % 2 == 0:
+        n += 1
+    return n
+
 def recomendar_gaxeta(fluido_p, fluido_s, t_max):
+    """Recomendação de material de vedação."""
     tipos = [
         BANCO_FLUIDOS.get(fluido_p, {}).get("tipo"),
         BANCO_SERVICOS.get(fluido_s, {}).get("tipo"),
@@ -125,25 +308,80 @@ def recomendar_gaxeta(fluido_p, fluido_s, t_max):
         return "PTFE", "Resistência extrema a temperatura."
     return "EPDM", "Melhor custo-benefício para fluidos aquosos."
 
-def calc_press_drop(re, n_placas, angulo):
-    factor = 1.5 if "H" in angulo else 1.0
-    if re == 0:
+def calc_press_drop_real(re, n_placas, angulo, vazao_kgh, dens_kgm3, canal_larg_m, dh_m, visc_pas):
+    """
+    Cálculo realista de queda de pressão em trocadores a placas.
+    
+    Considera:
+    - Perda de carga no canal das placas (fricção)
+    - Perdas localizadas nas portas (entradas/saídas)
+    """
+    if re <= 0 or n_placas < 2:
         return 0.0
-    dp = 0.5 * factor * (1000.0 / re) * (n_placas / 10.0)
-    return dp
+    
+    # Número de canais por lado
+    canais_por_lado = max(1, (n_placas - 1) // 2)
+    
+    # Velocidade no canal
+    vazao_kgs = vazao_kgh / 3600.0
+    espacamento = dh_m / 2.0
+    area_fluxo = canal_larg_m * espacamento
+    if area_fluxo <= 0:
+        return 0.0
+    
+    vazao_por_canal = vazao_kgs / canais_por_lado
+    u = vazao_por_canal / (dens_kgm3 * area_fluxo)
+    
+    # Fator de fricção dependendo de Re e ângulo
+    if "H" in angulo:
+        # Alto ângulo = maior turbulência = maior fator de fricção
+        if re < 2000:
+            f = 16.0 / re
+        else:
+            f = 0.5 / (re ** 0.2)
+    elif "L" in angulo:
+        # Baixo ângulo = menor turbulência
+        if re < 2000:
+            f = 16.0 / re
+        else:
+            f = 0.3 / (re ** 0.2)
+    else:
+        if re < 2000:
+            f = 16.0 / re
+        else:
+            f = 0.4 / (re ** 0.2)
+    
+    # Comprimento hidráulico do canal (estimado: 2× comprimento da placa)
+    comp_hidraulico = 2.0 * 0.5  # estimativa genérica, ajustar por modelo
+    
+    # Perda de carga por fricção no canal (Pa)
+    # dP = 4f × (L/dh) × (rho × u² / 2)
+    dp_canal = 4.0 * f * (comp_hidraulico / dh_m) * (dens_kgm3 * u ** 2 / 2.0)
+    
+    # Perda localizada nas portas (aproximação)
+    # Velocidade na porta (tubo de conexão) - assumindo tubo de 2" = 0.05m diâm
+    d_porta = 0.05
+    area_porta = math.pi * (d_porta ** 2) / 4.0
+    u_porta = vazao_kgs / (dens_kgm3 * area_porta)
+    k_local = 3.0  # coeficiente de perda localizada (entradas, saídas, mudanças de direção)
+    dp_portas = k_local * (dens_kgm3 * u_porta ** 2 / 2.0)
+    
+    dp_total = dp_canal + dp_portas
+    
+    # Converter para kPa
+    return dp_total / 1000.0
 
-def get_pass_arrangement(vazao_kgh, lmtd):
-    if vazao_kgh > 20000 or lmtd < 2.0:
-        return "2/2", "Two Pass", "Necessário para aproximar temperaturas ou gerenciar alta vazão."
-    return "1/1", "Single Pass", "Arranjo padrão para eficiência máxima e manutenção facilitada."
+def get_pass_arrangement(vazao_kgh, lmtd, temp_max):
+    """
+    Determina arranjo de passes baseado em critérios térmicos e hidráulicos.
+    """
+    # Se LMTD é muito baixo (< 3°C) ou vazão muito alta, multi-passe ajuda
+    if lmtd < 3.0 or vazao_kgh > 20000:
+        return "2/2", "Two Pass", "Necessário para melhor aproximação térmica ou gerenciar alta vazão."
+    return "1/1", "Single Pass", "Arranjo padrão para máxima eficiência em contra-corrente."
 
 def determinar_conexoes(arranjo_passe):
-    """
-    Define onde os fluidos entram e saem.
-    - Single Pass (1/1): Todas as 4 conexões no cabeçote FIXO.
-    - Two Pass (2/2): Cada fluido precisa de conexões em LADOS OPOSTOS
-      para permitir a reversão de fluxo no segundo passe.
-    """
+    """Define onde os fluidos entram e saem."""
     if arranjo_passe == "1/1":
         return {
             "produto_entrada": "Cabeçote Fixo (Frame Plate)",
@@ -154,7 +392,6 @@ def determinar_conexoes(arranjo_passe):
             "port_arrangement": "4 conexões frontais no cabeçote fixo",
         }
     else:
-        # TWO PASS: conexões obrigatoriamente em lados opostos
         return {
             "produto_entrada": "Cabeçote Fixo (Frame Plate)",
             "produto_saida": "Prato de Pressão (Pressure Plate)",
@@ -163,65 +400,21 @@ def determinar_conexoes(arranjo_passe):
             "descricao": (
                 "Arranjo 2/2: Conexões em lados opostos obrigatoriamente. "
                 "Cada fluido entra de um lado, percorre o 1º passe, "
-                "chega ao cabeçote oposto e retorna no 2º passe. "
-                "Port Arrangement alternado (U-type ou Z-type)."
+                "chega ao cabeçote oposto e retorna no 2º passe."
             ),
             "port_arrangement": "Pass 1: Fixo -> Móvel | Pass 2: Móvel -> Fixo",
         }
-
-def calc_lmtd(t1, t2, t3, t4):
-    """LMTD para contracorrente."""
-    dt1 = abs(t1 - t4)
-    dt2 = abs(t2 - t3)
-    if dt1 <= 0 or dt2 <= 0:
-        return 0.1
-    lmtd = (dt1 - dt2) / math.log(dt1 / dt2)
-    return lmtd
-
-def calc_nusselt(re, pr):
-    if re <= 0 or pr <= 0:
-        return 5.0
-    if re < 2000:
-        return 0.664 * (re ** 0.5) * (pr ** 0.33)
-    return 0.037 * (re ** 0.8) * (pr ** 0.33)
-
-def calc_h(nu, k, dh):
-    if dh <= 0:
-        return 0.0
-    return (nu * k) / dh
-
-def calc_area(Q_kw, U, lmtd, F=0.95):
-    if U <= 0 or lmtd <= 0:
-        return 0.0
-    Q_w = Q_kw * 1000.0
-    A = Q_w / (U * lmtd * F)
-    return A
-
-def calc_vazao_servico(Q_kw, cp, dt):
-    if cp <= 0 or dt <= 0:
-        return 0.0
-    Q_kcal_h = Q_kw * 860.0
-    vazao = Q_kcal_h / (cp * dt)
-    return vazao
-
-def calc_num_placas(area_total, area_placa):
-    if area_placa <= 0:
-        return 0
-    n = math.ceil(area_total / area_placa)
-    # garantir paridade mínima e canais
-    if n < 3:
-        n = 3
-    return n
 
 # ============================================================================
 # GERAÇÃO DE PDF TÉCNICO
 # ============================================================================
 
 def gerar_pdf(
-    tag, projeto, modelo, angulo, arranjo, conexoes,
+    tag, projeto, modelo, angulo, arranjo, conexoes, fluxo_config,
     prod, vazao_p, t_in_p, t_out_p,
     serv, vazao_s_calc, t_in_s, t_out_s,
-    carga_kw, area_req, n_placas, lmtd, re_p, re_s,
+    carga_kw, carga_w, area_req, n_placas, lmtd, fator_f,
+    re_p, re_s, pr_p, pr_s, h_p, h_s, U_calc,
     dp_p, dp_s, gaxeta, gaxeta_desc,
     data_str,
 ):
@@ -251,7 +444,6 @@ def gerar_pdf(
 
     story = []
 
-    # Cabeçalho
     story.append(Paragraph("<b>AlfaVed Soluções Industriais</b>", style_title))
     story.append(Paragraph("Relatório Técnico de Dimensionamento - Trocador de Calor a Placas", style_normal))
     story.append(Paragraph(f"<b>Data:</b> {data_str}", style_normal))
@@ -264,6 +456,7 @@ def gerar_pdf(
         ["Projeto", projeto],
         ["Modelo Selecionado", modelo],
         ["Ângulo da Placa", angulo],
+        ["Configuração de Fluxo", fluxo_config],
         ["Arranjo de Passes", arranjo],
     ]
     t_geral = Table(dados_geral, colWidths=[8 * cm, 8 * cm])
@@ -271,12 +464,10 @@ def gerar_pdf(
         TableStyle(
             [
                 ("BACKGROUND", (0, 0), (0, -1), colors.HexColor("#f0f4f8")),
-                ("TEXTCOLOR", (0, 0), (-1, -1), colors.black),
                 ("ALIGN", (0, 0), (-1, -1), "LEFT"),
                 ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-                ("FONTNAME", (0, 0), (-1, -1), "Helvetica"),
-                ("FONTSIZE", (0, 0), (-1, -1), 10),
                 ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
+                ("FONTSIZE", (0, 0), (-1, -1), 10),
                 ("TOPPADDING", (0, 0), (-1, -1), 4),
                 ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
             ]
@@ -286,7 +477,7 @@ def gerar_pdf(
     story.append(Spacer(1, 10))
 
     # Conexões
-    story.append(Paragraph("<b>2. Configuração de Conexões (Cabeçotes)</b>", style_heading2))
+    story.append(Paragraph("<b>2. Configuração de Conexões</b>", style_heading2))
     story.append(Paragraph(f"<b>Descrição:</b> {conexoes['descricao']}", style_normal))
     story.append(Paragraph(f"<b>Port Arrangement:</b> {conexoes['port_arrangement']}", style_normal))
     dados_conn = [
@@ -302,9 +493,7 @@ def gerar_pdf(
                 ("TEXTCOLOR", (0, 0), (-1, 0), colors.whitesmoke),
                 ("BACKGROUND", (0, 1), (0, -1), colors.HexColor("#f0f4f8")),
                 ("ALIGN", (0, 0), (-1, -1), "CENTER"),
-                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
                 ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
-                ("FONTNAME", (0, 0), (-1, -1), "Helvetica"),
                 ("FONTSIZE", (0, 0), (-1, -1), 10),
                 ("TOPPADDING", (0, 0), (-1, -1), 4),
                 ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
@@ -331,9 +520,7 @@ def gerar_pdf(
                 ("TEXTCOLOR", (0, 0), (-1, 0), colors.whitesmoke),
                 ("BACKGROUND", (0, 1), (0, -1), colors.HexColor("#f0f4f8")),
                 ("ALIGN", (0, 0), (-1, -1), "CENTER"),
-                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
                 ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
-                ("FONTNAME", (0, 0), (-1, -1), "Helvetica"),
                 ("FONTSIZE", (0, 0), (-1, -1), 10),
                 ("TOPPADDING", (0, 0), (-1, -1), 4),
                 ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
@@ -347,13 +534,20 @@ def gerar_pdf(
     story.append(Paragraph("<b>4. Resultados do Dimensionamento</b>", style_heading2))
     dados_res = [
         ["Carga Térmica (kW)", f"{carga_kw:.2f}"],
+        ["Carga Térmica (W)", f"{carga_w:,.0f}"],
         ["LMTD (°C)", f"{lmtd:.2f}"],
+        ["Fator F de Correção", f"{fator_f:.3f}"],
         ["Área Requerida (m²)", f"{area_req:.2f}"],
         ["Número de Placas", f"{n_placas}"],
         ["Reynolds - Produto", f"{re_p:,.0f}"],
         ["Reynolds - Serviço", f"{re_s:,.0f}"],
-        ["ΔP Estimado - Produto (kPa)", f"{dp_p:.2f}"],
-        ["ΔP Estimado - Serviço (kPa)", f"{dp_s:.2f}"],
+        ["Prandtl - Produto", f"{pr_p:.2f}"],
+        ["Prandtl - Serviço", f"{pr_s:.2f}"],
+        ["h Convectivo - Produto (W/m²K)", f"{h_p:.1f}"],
+        ["h Convectivo - Serviço (W/m²K)", f"{h_s:.1f}"],
+        ["U Global Calculado (W/m²K)", f"{U_calc:.1f}"],
+        ["ΔP Estimada - Produto (kPa)", f"{dp_p:.2f}"],
+        ["ΔP Estimada - Serviço (kPa)", f"{dp_s:.2f}"],
         ["Gaxeta Recomendada", gaxeta],
         ["Observação Gaxeta", gaxeta_desc],
     ]
@@ -363,9 +557,7 @@ def gerar_pdf(
             [
                 ("BACKGROUND", (0, 0), (0, -1), colors.HexColor("#f0f4f8")),
                 ("ALIGN", (0, 0), (-1, -1), "LEFT"),
-                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
                 ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
-                ("FONTNAME", (0, 0), (-1, -1), "Helvetica"),
                 ("FONTSIZE", (0, 0), (-1, -1), 10),
                 ("TOPPADDING", (0, 0), (-1, -1), 4),
                 ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
@@ -425,7 +617,7 @@ def main():
     st.markdown(
         '<div class="main-header">'
         '<h1>AlfaVed Engenharia Térmica</h1>'
-        '<h3>Dimensionador de Trocadores Alfa Laval</h3>'
+        '<h3>Dimensionador de Trocadores Alfa Laval v2.0</h3>'
         f'<p>Data: {datetime.now().strftime("%d/%m/%Y")}</p>'
         "</div>",
         unsafe_allow_html=True,
@@ -452,6 +644,12 @@ def main():
             ["Automatico (Recomendado)", "H (45°)", "L (60°)", "Mista (HL = 52.5°)"],
         )
 
+        fluxo_config = st.selectbox(
+            "Configuração de Fluxo",
+            ["Contra-corrente (Recomendado)", "Co-corrente"],
+            help="Contra-corrente: máxima eficiência. Co-corrente: usado em casos específicos de controle térmico."
+        )
+
         st.divider()
         st.subheader("Lado do Produto")
         prod = st.selectbox("Fluido Produto", list(BANCO_FLUIDOS.keys()))
@@ -465,55 +663,139 @@ def main():
         t_in_s = st.number_input("Temp. Entrada Serviço (°C)", -30.0, 300.0, 2.0, step=0.5)
         t_out_s = st.number_input("Temp. Saída Serviço (°C)", -30.0, 300.0, 7.0, step=0.5)
 
-    # CÁLCULOS
+    # ============================================================================
+    # CÁLCULOS DE ENGENHARIA
+    # ============================================================================
+
     d_p = BANCO_FLUIDOS[prod]
     d_s = BANCO_SERVICOS[serv]
     d_m = BANCO_MODELOS[modelo]
 
-    carga_kw = (vazao_p * d_p["cp"] * abs(t_in_p - t_out_p)) / 3600.0
+    # Temperaturas médias para propriedades
+    t_media_p = (t_in_p + t_out_p) / 2.0
+    t_media_s = (t_in_s + t_out_s) / 2.0
 
+    # Carga térmica (W)
+    carga_w = (vazao_p * d_p["cp"] * abs(t_in_p - t_out_p)) / 3600.0
+    carga_kw = carga_w / 1000.0
+
+    # Vazão do serviço
     is_vapor = d_s["tipo"] == "vapor"
     if is_vapor:
         hfg = get_calor_latente(t_in_s)
-        vazao_s_calc = (carga_kw * 3600.0) / hfg if hfg > 0 else 0.0
+        vazao_s_calc = (carga_w * 3600.0) / (hfg * 1000) if hfg > 0 else 0.0
     else:
         dt_s = abs(t_out_s - t_in_s)
         if dt_s > 0:
-            vazao_s_calc = calc_vazao_servico(carga_kw, d_s["cp"], dt_s)
+            vazao_s_calc = calc_vazao_servico(carga_w, d_s["cp"], dt_s)
         else:
             vazao_s_calc = 0.0
 
-    lmtd = calc_lmtd(t_in_p, t_out_p, t_in_s, t_out_s)
+    # LMTD baseado na configuração de fluxo
+    fluxo_tipo = "co" if "Co" in fluxo_config else "contra"
+    lmtd = calc_lmtd(t_in_p, t_out_p, t_in_s, t_out_s, fluxo=fluxo_tipo)
 
-    arranjo, nome_arranjo, desc_arranjo = get_pass_arrangement(vazao_p, lmtd)
+    # Arranjo de passes
+    arranjo, nome_arranjo, desc_arranjo = get_pass_arrangement(vazao_p, lmtd, max(t_in_p, t_out_p))
+    n_passes = 2 if arranjo == "2/2" else 1
+
+    # Fator F de correção LMTD (apenas para multi-passes)
+    # P e R para cálculo do fator F
+    T1 = max(t_in_p, t_out_p)  # quente
+    T2 = min(t_in_p, t_out_p)  # quente
+    t1 = min(t_in_s, t_out_s)  # frio
+    t2 = max(t_in_s, t_out_s)  # frio
+    
+    dt_hot = abs(T1 - T2)
+    dt_cold = abs(t2 - t1)
+    
+    P_f = dt_cold / (T1 - t1) if (T1 - t1) > 0 else 0.5
+    R_f = dt_hot / dt_cold if dt_cold > 0 else 1.0
+    
+    fator_f = calc_fator_f(P_f, R_f, n_passes)
+
+    # Determinar conexões
     conexoes = determinar_conexoes(arranjo)
 
-    # Estimativa de U
-    U_est = d_m["U"]
+    # ============================================================================
+    # CÁLCULO ITERATIVO DE PLACAS E COEFICIENTES
+    # ============================================================================
 
-    # Ajuste U pelo ângulo
-    if "L" in angulo_sel:
-        U_est *= 1.05
-    elif "Mista" in angulo_sel:
-        U_est *= 1.02
+    # Primeira estimativa: usar U típico do modelo para estimar número de placas
+    U_teorico = 4000  # W/m²K típico para placas
+    area_estimada = calc_area(carga_w, U_teorico, lmtd, fator_f)
+    n_placas_est = calc_num_placas(area_estimada, d_m["area"])
 
-    area_req = calc_area(carga_kw, U_est, lmtd)
+    # Agora calcular Reynolds, Prandtl, Nusselt e h para ambos os lados
+    # com o número estimado de placas
+    re_p = calc_reynolds_real(
+        vazao_p, d_p["visc"], d_p["dens"], d_m["dh"],
+        d_m["canal_larg"], n_placas_est, arranjo
+    )
+    re_s = calc_reynolds_real(
+        vazao_s_calc, d_s["visc"], d_s["dens"], d_m["dh"],
+        d_m["canal_larg"], n_placas_est, arranjo
+    )
+
+    # Número de Prandtl
+    pr_p = calc_prandtl(d_p["cp"], d_p["visc"], d_p["cond"])
+    pr_s = calc_prandtl(d_s["cp"], d_s["visc"], d_s["cond"])
+
+    # Nusselt e coeficiente convectivo h
+    nu_p = calc_nusselt_placa(re_p, pr_p, angulo_sel)
+    nu_s = calc_nusselt_placa(re_s, pr_s, angulo_sel)
+
+    h_p = calc_h_coef(nu_p, d_p["cond"], d_m["dh"])
+    h_s = calc_h_coef(nu_s, d_s["cond"], d_m["dh"])
+
+    # U global real considerando resistências individuais
+    U_calc = calc_u_global(h_p, h_s, esp_placa=0.0005, k_placa=17.0)
+
+    # Recalcular área e número de placas com U real
+    area_req = calc_area(carga_w, U_calc, lmtd, fator_f)
     n_placas = calc_num_placas(area_req, d_m["area"])
 
-    # Reynolds
-    re_p = calc_reynolds(vazao_p, d_p["visc"], d_p["dens"], d_m["dh"])
-    if is_vapor:
-        re_s = 15000.0  # estimativa para vapor
-    else:
-        re_s = calc_reynolds(vazao_s_calc, d_s["visc"], d_s["dens"], d_m["dh"])
+    # Se o número de placas mudou significativamente, pode-se iterar novamente
+    # Para simplificar, usamos o valor final
+
+    # Recalcular Reynolds com número final de placas
+    re_p = calc_reynolds_real(
+        vazao_p, d_p["visc"], d_p["dens"], d_m["dh"],
+        d_m["canal_larg"], n_placas, arranjo
+    )
+    re_s = calc_reynolds_real(
+        vazao_s_calc, d_s["visc"], d_s["dens"], d_m["dh"],
+        d_m["canal_larg"], n_placas, arranjo
+    )
+
+    # Recalcular h com Reynolds atualizado
+    nu_p = calc_nusselt_placa(re_p, pr_p, angulo_sel)
+    nu_s = calc_nusselt_placa(re_s, pr_s, angulo_sel)
+    h_p = calc_h_coef(nu_p, d_p["cond"], d_m["dh"])
+    h_s = calc_h_coef(nu_s, d_s["cond"], d_m["dh"])
+    U_calc = calc_u_global(h_p, h_s)
+
+    # Recalcular área final
+    area_req = calc_area(carga_w, U_calc, lmtd, fator_f)
+    n_placas = calc_num_placas(area_req, d_m["area"])
 
     # Queda de pressão
-    dp_p = calc_press_drop(re_p, n_placas, angulo_sel)
-    dp_s = calc_press_drop(re_s, n_placas, angulo_sel)
+    dp_p = calc_press_drop_real(
+        re_p, n_placas, angulo_sel, vazao_p, d_p["dens"],
+        d_m["canal_larg"], d_m["dh"], d_p["visc"]
+    )
+    dp_s = calc_press_drop_real(
+        re_s, n_placas, angulo_sel, vazao_s_calc, d_s["dens"],
+        d_m["canal_larg"], d_m["dh"], d_s["visc"]
+    )
 
     # Gaxeta
     t_max = max(t_in_p, t_out_p, t_in_s, t_out_s)
     gaxeta, gaxeta_desc = recomendar_gaxeta(prod, serv, t_max)
+
+    # ============================================================================
+    # PAINEL DE RESULTADOS
+    # ============================================================================
 
     with col_out:
         st.subheader("Resultados do Dimensionamento")
@@ -521,17 +803,34 @@ def main():
         m1, m2, m3 = st.columns(3)
         m1.metric("Carga Térmica", f"{carga_kw:.1f} kW")
         m2.metric("LMTD", f"{lmtd:.1f} °C")
-        m3.metric("Área Req.", f"{area_req:.2f} m²")
+        m3.metric("Fator F", f"{fator_f:.3f}")
 
         m4, m5, m6 = st.columns(3)
-        m4.metric("Nº Placas", f"{n_placas}")
-        m5.metric("Re Produto", f"{re_p:,.0f}")
-        m6.metric("Re Serviço", f"{re_s:,.0f}")
+        m4.metric("Área Req.", f"{area_req:.2f} m²")
+        m5.metric("Nº Placas", f"{n_placas}")
+        m6.metric("U Global", f"{U_calc:.0f} W/m²K")
+
+        # Diagnóstico térmico
+        st.markdown("#### Diagnóstico Térmico")
+        col_d1, col_d2 = st.columns(2)
+        with col_d1:
+            st.metric("Re Produto", f"{re_p:,.0f}")
+            st.metric("Pr Produto", f"{pr_p:.2f}")
+            st.metric("h Produto", f"{h_p:.0f} W/m²K")
+        with col_d2:
+            st.metric("Re Serviço", f"{re_s:,.0f}")
+            st.metric("Pr Serviço", f"{pr_s:.2f}")
+            st.metric("h Serviço", f"{h_s:.0f} W/m²K")
+
+        # Regime de escoamento
+        regime_p = "Laminar" if re_p < 2000 else ("Transição" if re_p < 10000 else "Turbulento")
+        regime_s = "Laminar" if re_s < 2000 else ("Transição" if re_s < 10000 else "Turbulento")
+        st.caption(f"Regime Produto: **{regime_p}** | Regime Serviço: **{regime_s}**")
 
         st.markdown("#### Arranjo de Passes")
         st.info(f"**{nome_arranjo}** ({arranjo}) — {desc_arranjo}")
 
-        st.markdown("#### Configuração de Conexões (Cabeçotes)")
+        st.markdown("#### Configuração de Conexões")
         st.markdown(
             f"""
             | | Entrada | Saída |
@@ -563,13 +862,36 @@ def main():
         col_dp1.metric("ΔP Produto", f"{dp_p:.2f} kPa")
         col_dp2.metric("ΔP Serviço", f"{dp_s:.2f} kPa")
 
+        # Alertas de projeto
+        st.markdown("#### Verificações de Projeto")
+        checks = []
+        if t_max > d_m["Tmax"]:
+            checks.append(f"⚠️ Temperatura máxima ({t_max:.1f}°C) excede limite do modelo ({d_m['Tmax']}°C)")
+        if dp_p > 150:
+            checks.append(f"⚠️ ΔP do produto ({dp_p:.1f} kPa) está elevada (>150 kPa)")
+        if dp_s > 150:
+            checks.append(f"⚠️ ΔP do serviço ({dp_s:.1f} kPa) está elevada (>150 kPa)")
+        if fator_f < 0.75:
+            checks.append(f"⚠️ Fator F ({fator_f:.3f}) baixo — considere aumentar passes ou ajustar temperaturas")
+        if re_p < 2000:
+            checks.append(f"ℹ️ Reynolds produto ({re_p:.0f}) em regime laminar — eficiência reduzida")
+        if re_s < 2000:
+            checks.append(f"ℹ️ Reynolds serviço ({re_s:.0f}) em regime laminar — eficiência reduzida")
+        
+        if checks:
+            for c in checks:
+                st.warning(c)
+        else:
+            st.success("✅ Todos os parâmetros dentro dos limites recomendados.")
+
         # PDF
         data_str = datetime.now().strftime("%d/%m/%Y")
         pdf_buffer = gerar_pdf(
-            tag, projeto, modelo, angulo_sel, nome_arranjo, conexoes,
+            tag, projeto, modelo, angulo_sel, nome_arranjo, conexoes, fluxo_config,
             prod, vazao_p, t_in_p, t_out_p,
             serv, vazao_s_calc, t_in_s, t_out_s,
-            carga_kw, area_req, n_placas, lmtd, re_p, re_s,
+            carga_kw, carga_w, area_req, n_placas, lmtd, fator_f,
+            re_p, re_s, pr_p, pr_s, h_p, h_s, U_calc,
             dp_p, dp_s, gaxeta, gaxeta_desc,
             data_str,
         )
