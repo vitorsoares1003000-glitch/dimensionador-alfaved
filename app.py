@@ -349,4 +349,132 @@ def main():
             st.divider()
             submitted = st.form_submit_button('CALCULAR DIMENSIONAMENTO', use_container_width=True, type='primary')
         if submitted:
-            resultados = calculate_dimensionamento(produto, BANCO_FLUIDOS[produto], modelo, dados_mod, t_in_prod, t_out_prod, t_in_serv, t_out_serv, vazao_prod, 
+           resultados = calculate_dimensionamento(
+                produto, BANCO_FLUIDOS[produto], modelo, dados_mod,
+                t_in_prod, t_out_prod, t_in_serv, t_out_serv,
+                vazao_prod, BANCO_SERVICOS[servico]
+            )
+            pdf_bytes = build_pdf(
+                modelo, tag, projeto, produto, servico,
+                t_in_prod, t_out_prod, t_in_serv, t_out_serv,
+                vazao_prod, resultados['vazao_serv'],
+                resultados, tipo_modelo
+            )
+            st.session_state.resultados = resultados
+            st.session_state.pdf_bytes = pdf_bytes
+            st.session_state.modelo_res = modelo
+            st.session_state.tipo_modelo_res = tipo_modelo
+            st.session_state.tag_res = tag
+            st.session_state.projeto_res = projeto
+            st.session_state.produto_res = produto
+            st.session_state.servico_res = servico
+            st.session_state.t_in_prod_res = t_in_prod
+            st.session_state.t_out_prod_res = t_out_prod
+            st.session_state.t_in_serv_res = t_in_serv
+            st.session_state.t_out_serv_res = t_out_serv
+            st.session_state.vazao_prod_res = vazao_prod
+            st.success('Calculo e relatorios estruturados com sucesso!')
+            st.rerun()
+
+    with result_col:
+        if 'resultados' in st.session_state:
+            resultados = st.session_state.resultados
+            st.markdown('### RESULTADOS DO DIMENSIONAMENTO')
+
+            kpi_col1, kpi_col2, kpi_col3 = st.columns(3)
+            with kpi_col1:
+                st.markdown('<div class="metric-box">', unsafe_allow_html=True)
+                st.metric('Carga Termica', f'{resultados["carga_kw"]:.2f} kW')
+                st.markdown('</div>', unsafe_allow_html=True)
+            with kpi_col2:
+                st.markdown('<div class="metric-box">', unsafe_allow_html=True)
+                st.metric('Area Requerida', f'{resultados["area_m2"]:.2f} m2')
+                st.markdown('</div>', unsafe_allow_html=True)
+            with kpi_col3:
+                st.markdown('<div class="metric-box">', unsafe_allow_html=True)
+                st.metric('Quantidade Placas', f'{resultados["placas"]}')
+                st.markdown('</div>', unsafe_allow_html=True)
+
+            st.divider()
+            st.markdown('#### Analise de Turbulencia')
+            turb_col1, turb_col2 = st.columns(2)
+            with turb_col1:
+                st.markdown('<div class="section-card">', unsafe_allow_html=True)
+                st.markdown('**Lado Produto**')
+                st.metric('Reynolds', f'{resultados["reynolds_prod"]:.0f}', resultados['regime_prod'])
+                st.caption(resultados['desc_prod'])
+                st.markdown('</div>', unsafe_allow_html=True)
+            with turb_col2:
+                st.markdown('<div class="section-card">', unsafe_allow_html=True)
+                st.markdown('**Lado Servico**')
+                st.metric('Reynolds', f'{resultados["reynolds_serv"]:.0f}', resultados['regime_serv'])
+                st.caption(resultados['desc_serv'])
+                st.markdown('</div>', unsafe_allow_html=True)
+
+            st.divider()
+            st.markdown('#### Configuracao Recomendada')
+            placa_info = ANGULOS_PLACA[resultados['tipo_placa']]
+            placa_col1, placa_col2 = st.columns(2)
+            with placa_col1:
+                st.markdown(
+                    f'<div class="result-success">'
+                    f'<h4>Tipo de Placa: <strong>{resultados["tipo_placa"]}</strong></h4>'
+                    f'<p>{placa_info["descricao"]}</p><hr>'
+                    f'<p><strong>Turbulencia:</strong> {placa_info["turbulencia"]}</p>'
+                    f'<p><strong>Queda Pressao:</strong> {placa_info["queda_pressao"]}</p>'
+                    f'<p><strong>Combinacoes:</strong> {placa_info.get("combinacoes", "HH/HL/LL")}</p>'
+                    f'</div>',
+                    unsafe_allow_html=True
+                )
+            with placa_col2:
+                st.markdown(
+                    f'<div class="result-warning">'
+                    f'<p><strong>Multiplicador U:</strong> {resultados["multiplicador_placa"]:.2f}x</p>'
+                    f'<p><strong>U Adotado:</strong> {resultados["U_adotado"]:.0f} W/m2K</p>'
+                    f'<p><strong>LMTD:</strong> {resultados["lmtd"]:.2f} C</p>'
+                    f'<p><strong>Linha:</strong> {resultados.get("linha_modelo", "N/A")}</p>'
+                    f'<p><strong>Material:</strong> {resultados.get("material_modelo", "N/A")}</p>'
+                    f'<p><strong>Conexao:</strong> {resultados.get("conexao", "N/A")}</p>'
+                    f'</div>',
+                    unsafe_allow_html=True
+                )
+            st.info(f"{resultados['justificativa_placa']}")
+
+            st.divider()
+            st.markdown('#### Datasheet Tecnico')
+            st.download_button(
+                label='📥 Download Datasheet PDF',
+                data=st.session_state.pdf_bytes,
+                file_name=f'datasheet_{st.session_state.get("tag_res", "TC")}.pdf',
+                mime='application/pdf',
+                use_container_width=True
+            )
+
+            st.divider()
+            st.markdown('#### Responsaveis Tecnicos')
+            st.markdown(
+                '<div class="contact-card">'
+                '<p><strong>Vitor Soares</strong> - Responsavel pelo Projeto<br>'
+                'E-mail: engenharia@alfaved.com.br | Tel: (18) 9.9669-7330</p>'
+                '</div>',
+                unsafe_allow_html=True
+            )
+            st.markdown(
+                '<div class="contact-card">'
+                '<p><strong>Jhonatan Dias Dejato</strong> - Diretor de Engenharia<br>'
+                'E-mail: jhonatan@alfaved.com.br | Tel: (18) 9.9628-8714</p>'
+                '</div>',
+                unsafe_allow_html=True
+            )
+        else:
+            st.markdown(
+                '<div class="section-card">'
+                '<p style="text-align: center; color: #999;">'
+                'Preencha os dados de entrada e clique em '
+                '<strong>CALCULAR DIMENSIONAMENTO</strong>'
+                '</p></div>',
+                unsafe_allow_html=True
+            )
+
+if __name__ == '__main__':
+    main()
