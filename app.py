@@ -3,59 +3,80 @@ import json
 import math
 import google.genai as genai
 import streamlit as st
-
 st.set_page_config(page_title="AlfaVed Engenharia - Dimensionador", page_icon="▲", layout="wide")
-
 from reportlab.lib.pagesizes import letter
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
 from reportlab.pdfgen import canvas
 
+# ============================================================================
+# BANCO DE DADOS — GAXETADOS (SIMPLIS)
+# Variantes B (BaseLine) e M (M-line) + WideGap
+# ============================================================================
+
 BANCO_MODELOS_GAXETADOS = {
-    "Alfa Laval M3 (Gaxetado)": {"tipo": "gaxetado", "area_placa": 0.03, "U_base": 3800, "pressao_max": 25, "temp_max": 120, "dh": 0.003},
-    "Alfa Laval TL3 (Gaxetado)": {"tipo": "gaxetado", "area_placa": 0.06, "U_base": 3900, "pressao_max": 25, "temp_max": 120, "dh": 0.004},
-    "Alfa Laval M6 (Gaxetado)": {"tipo": "gaxetado", "area_placa": 0.14, "U_base": 4200, "pressao_max": 25, "temp_max": 130, "dh": 0.005},
-    "Alfa Laval M6-M (Gaxetado)": {"tipo": "gaxetado", "area_placa": 0.16, "U_base": 4250, "pressao_max": 30, "temp_max": 140, "dh": 0.005},
-    "Alfa Laval TL6 (Gaxetado)": {"tipo": "gaxetado", "area_placa": 0.21, "U_base": 4300, "pressao_max": 30, "temp_max": 140, "dh": 0.006},
-    "Alfa Laval M10 (Gaxetado)": {"tipo": "gaxetado", "area_placa": 0.24, "U_base": 4500, "pressao_max": 30, "temp_max": 160, "dh": 0.006},
-    "Alfa Laval M10-M (Gaxetado)": {"tipo": "gaxetado", "area_placa": 0.34, "U_base": 4550, "pressao_max": 35, "temp_max": 170, "dh": 0.007},
-    "Alfa Laval TL10 (Gaxetado)": {"tipo": "gaxetado", "area_placa": 0.46, "U_base": 4600, "pressao_max": 35, "temp_max": 170, "dh": 0.007},
-    "Alfa Laval M15 (Gaxetado)": {"tipo": "gaxetado", "area_placa": 0.61, "U_base": 4700, "pressao_max": 35, "temp_max": 180, "dh": 0.008},
-    "Alfa Laval M15-M (Gaxetado)": {"tipo": "gaxetado", "area_placa": 0.509, "U_base": 4700, "pressao_max": 35, "temp_max": 180, "dh": 0.008},
-    "Alfa Laval T20B (Gaxetado)": {"tipo": "gaxetado", "area_placa": 0.46, "U_base": 4600, "pressao_max": 35, "temp_max": 180, "dh": 0.007},
-    "Alfa Laval MA30 (Gaxetado)": {"tipo": "gaxetado", "area_placa": 0.80, "U_base": 4800, "pressao_max": 25, "temp_max": 210, "dh": 0.009},
-    "Alfa Laval MA30S (Gaxetado)": {"tipo": "gaxetado", "area_placa": 0.85, "U_base": 4800, "pressao_max": 25, "temp_max": 210, "dh": 0.009},
-    "Alfa Laval WideGap 350S (Gaxetado)": {"tipo": "gaxetado", "area_placa": 1.20, "U_base": 4900, "pressao_max": 25, "temp_max": 210, "dh": 0.010}
+    # --- BaseLine (B) — utilidades, até 10 bar ---
+    "Alfa Laval M3 (Gaxetado)": {"tipo": "gaxetado", "linha": "BaseLine", "area_placa": 0.030, "U_base": 3800, "pressao_max": 16, "temp_max": 180, "dh": 0.003, "conexao": '1¼" (DN32)', "material": "AISI 316 / Ti"},
+    "Alfa Laval M6-B (Gaxetado)": {"tipo": "gaxetado", "linha": "BaseLine", "area_placa": 0.150, "U_base": 4200, "pressao_max": 10, "temp_max": 180, "dh": 0.005, "conexao": "DN50 (2\")", "material": "AISI 304 / 316 / Ti"},
+    "Alfa Laval M10-B (Gaxetado)": {"tipo": "gaxetado", "linha": "BaseLine", "area_placa": 0.240, "U_base": 4500, "pressao_max": 10, "temp_max": 180, "dh": 0.006, "conexao": "DN100 (4\")", "material": "AISI 304 / 316 / Ti"},
+    "Alfa Laval M15-B (Gaxetado)": {"tipo": "gaxetado", "linha": "BaseLine", "area_placa": 0.360, "U_base": 4700, "pressao_max": 10, "temp_max": 180, "dh": 0.008, "conexao": "DN150 (6\")", "material": "AISI 304 / 316 / Ti"},
+    "Alfa Laval T20-B (Gaxetado)": {"tipo": "gaxetado", "linha": "BaseLine", "area_placa": 0.850, "U_base": 4800, "pressao_max": 10, "temp_max": 180, "dh": 0.009, "conexao": "DN200 (8\")", "material": "AISI 304 / 316 / Ti"},
+
+    # --- M-line (M) — alta pressão, higiênico, CIP, FDA ---
+    "Alfa Laval M6-M (Gaxetado)": {"tipo": "gaxetado", "linha": "M-line", "area_placa": 0.150, "U_base": 4250, "pressao_max": 25, "temp_max": 180, "dh": 0.005, "conexao": "DN50 (2\")", "material": "AISI 316 / Ti", "fda": True, "cip": True},
+    "Alfa Laval M10-M (Gaxetado)": {"tipo": "gaxetado", "linha": "M-line", "area_placa": 0.240, "U_base": 4550, "pressao_max": 40, "temp_max": 180, "dh": 0.006, "conexao": "DN100 (4\")", "material": "AISI 316 / 254 SMO / Ti", "fda": True, "cip": True},
+    "Alfa Laval M15-M (Gaxetado)": {"tipo": "gaxetado", "linha": "M-line", "area_placa": 0.360, "U_base": 4750, "pressao_max": 25, "temp_max": 180, "dh": 0.008, "conexao": "DN150 (6\")", "material": "AISI 316 / 254 SMO / Ti", "fda": True, "cip": True},
+    "Alfa Laval T20-M (Gaxetado)": {"tipo": "gaxetado", "linha": "M-line", "area_placa": 0.850, "U_base": 4900, "pressao_max": 30, "temp_max": 180, "dh": 0.009, "conexao": "DN200 (8\")", "material": "AISI 316 / Ti", "fda": True, "cip": True},
+
+    # --- WideGap — canal largo para fibrosos/particulados ---
+    "Alfa Laval MA30-S WideGap (Gaxetado)": {"tipo": "gaxetado", "linha": "WideGap", "area_placa": 1.380, "U_base": 3800, "pressao_max": 25, "temp_max": 180, "dh": 0.012, "conexao": "DN300 (12\")", "material": "AISI 316 / 254 SMO / Ti", "canal": "8/8 mm ou 11/5 mm"},
+    "Alfa Laval WideGap 350 (Gaxetado)": {"tipo": "gaxetado", "linha": "WideGap", "area_placa": 1.800, "U_base": 3700, "pressao_max": 10, "temp_max": 180, "dh": 0.015, "conexao": "DN350 (14\")", "material": "AISI 316 / 254 SMO / Ti", "canal": "11/5, 17/5, 8/8 ou 11/11 mm"},
 }
 
+# ============================================================================
+# BANCO DE DADOS — SEMI-SOLDADAS (GASES/REFRIGERANTES)
+# Canal soldado a laser para gases, refrigerantes e fluidos agressivos
+# ============================================================================
+
 BANCO_MODELOS_SEMI_SOLDADOS = {
-    "Alfa Laval M10BW (Semi-Soldado)": {"tipo": "semi-soldado", "area_placa": 0.24, "U_base": 4600, "pressao_max": 25, "temp_max": 150, "dh": 0.006},
-    "Alfa Laval T20BW (Semi-Soldado)": {"tipo": "semi-soldado", "area_placa": 0.75, "U_base": 4900, "pressao_max": 40, "temp_max": 180, "dh": 0.008},
-    "Alfa Laval M20MW (Semi-Soldado)": {"tipo": "semi-soldado", "area_placa": 0.95, "U_base": 4700, "pressao_max": 40, "temp_max": 180, "dh": 0.008},
-    "Alfa Laval MK15BW (Semi-Soldado)": {"tipo": "semi-soldado", "area_placa": 0.58, "U_base": 4650, "pressao_max": 25, "temp_max": 150, "dh": 0.007},
-    "Alfa Laval A15BW (Semi-Soldado)": {"tipo": "semi-soldado", "area_placa": 0.55, "U_base": 4600, "pressao_max": 30, "temp_max": 160, "dh": 0.007}
+    "Alfa Laval M10-BW (Semi-Soldado)": {"tipo": "semi-soldado", "linha": "Semi-Welded", "area_placa": 0.240, "U_base": 4600, "pressao_max": 55, "temp_max": 250, "dh": 0.005, "conexao": "DN100 (4\")", "material": "316/316L / 254 SMO / C-276 / Ti", "canal_soldado": "2.4 mm", "aplicacao": "NH3, CO2, refrigerantes"},
+    "Alfa Laval MK15-BW (Semi-Soldado)": {"tipo": "semi-soldado", "linha": "Semi-Welded", "area_placa": 0.420, "U_base": 4650, "pressao_max": 41, "temp_max": 200, "dh": 0.006, "conexao": "DN150 (6\")", "material": "316/316L / 254 SMO / Ti", "canal_soldado": "2.5 mm", "aplicacao": "Evaporadores/condensadores NH3/CO2"},
+    "Alfa Laval TK20-BW (Semi-Soldado)": {"tipo": "semi-soldado", "linha": "Semi-Welded", "area_placa": 0.680, "U_base": 4700, "pressao_max": 63, "temp_max": 200, "dh": 0.006, "conexao": "DN150/200 (6\"/8\")", "material": "316/316L / 254 SMO / Ti", "canal_soldado": "2.5 mm", "aplicacao": "Heat pumps, refrigeração industrial alta pressão"},
+    "Alfa Laval T20-W (Semi-Soldado)": {"tipo": "semi-soldado", "linha": "Semi-Welded", "area_placa": 0.850, "U_base": 4800, "pressao_max": 30, "temp_max": 180, "dh": 0.009, "conexao": "DN200 (8\")", "material": "AISI 316 / Ti", "canal_soldado": "4.0 mm", "aplicacao": "Condensadores a vácuo, evaporadores grande porte"},
+    "Alfa Laval MA30-W (Semi-Soldado)": {"tipo": "semi-soldado", "linha": "Semi-Welded", "area_placa": 1.400, "U_base": 4900, "pressao_max": 40, "temp_max": 180, "dh": 0.010, "conexao": "DN300 (12\")", "material": "AISI 316 / 254 SMO / Ti", "canal_soldado": "4.5 mm", "aplicacao": "Condensadores de turbinas, refrigeração pesada"},
 }
 
 BANCO_MODELOS = {**BANCO_MODELOS_GAXETADOS, **BANCO_MODELOS_SEMI_SOLDADOS}
+
+# ============================================================================
+# BANCO DE FLUIDOS — PRODUTO
+# ============================================================================
 
 BANCO_FLUIDOS = {
     "Agua": {"cp": 4.18, "viscosidade": 0.89, "densidade": 1000},
     "Leite Integral": {"cp": 3.89, "viscosidade": 2.1, "densidade": 1030},
     "Leite Desnatado": {"cp": 3.95, "viscosidade": 1.5, "densidade": 1020},
     "Suco de Laranja": {"cp": 3.75, "viscosidade": 3.5, "densidade": 1040},
-    "Suco de Maçã": {"cp": 3.70, "viscosidade": 2.8, "densidade": 1035},
+    "Suco de Maca": {"cp": 3.70, "viscosidade": 2.8, "densidade": 1035},
     "Oleo Vegetal": {"cp": 1.97, "viscosidade": 50.0, "densidade": 920},
     "Oleo Mineral": {"cp": 1.88, "viscosidade": 100.0, "densidade": 880},
     "Melado": {"cp": 2.80, "viscosidade": 150.0, "densidade": 1380},
     "Cerveja": {"cp": 4.10, "viscosidade": 1.5, "densidade": 1010},
     "Vinho": {"cp": 3.85, "viscosidade": 1.2, "densidade": 1000},
-    "Chocolate Quente": {"cp": 3.50, "viscosidade": 8.0, "densidade": 1050}
+    "Chocolate Quente": {"cp": 3.50, "viscosidade": 8.0, "densidade": 1050},
+    "Polpa de Fruta": {"cp": 3.60, "viscosidade": 5.0, "densidade": 1050},
+    "Soro de Leite": {"cp": 3.95, "viscosidade": 1.2, "densidade": 1025},
+    "Creme de Leite": {"cp": 3.50, "viscosidade": 12.0, "densidade": 980},
 }
+
+# ============================================================================
+# BANCO DE FLUIDOS — SERVICO
+# ============================================================================
 
 BANCO_SERVICOS = {
     "Agua Fria": {"cp": 4.18, "viscosidade": 0.89, "densidade": 1000},
-    "Agua Gelada": {"cp": 4.18, "viscosidade": 0.89, "densidade": 1000},
+    "Agua Gelada": {"cp": 4.18, "viscosidade": 1.3, "densidade": 1000},
     "Agua Morna": {"cp": 4.18, "viscosidade": 0.65, "densidade": 995},
     "Agua Quente": {"cp": 4.18, "viscosidade": 0.35, "densidade": 960},
     "Vapor Saturado": {"cp": 2.0, "viscosidade": 0.015, "densidade": 0.6},
@@ -63,14 +84,41 @@ BANCO_SERVICOS = {
     "Refrigerante R22": {"cp": 1.45, "viscosidade": 0.018, "densidade": 450},
     "Refrigerante R410A": {"cp": 1.60, "viscosidade": 0.020, "densidade": 480},
     "Refrigerante R134a": {"cp": 1.52, "viscosidade": 0.019, "densidade": 470},
-    "Amonia Liquida": {"cp": 4.70, "viscosidade": 0.25, "densidade": 682},
-    "Ar Comprimido": {"cp": 1.01, "viscosidade": 0.018, "densidade": 1.2}
+    "Refrigerante R717 (NH3)": {"cp": 4.70, "viscosidade": 0.25, "densidade": 682},
+    "Refrigerante R744 (CO2)": {"cp": 3.50, "viscosidade": 0.07, "densidade": 1100},
+    "Ar Comprimido": {"cp": 1.01, "viscosidade": 0.018, "densidade": 1.2},
+    "Glicol 30%": {"cp": 3.70, "viscosidade": 3.5, "densidade": 1040},
+    "Glicol 50%": {"cp": 3.50, "viscosidade": 6.0, "densidade": 1070},
 }
 
+# ============================================================================
+# DESIGNACAO DE ANGULOS — H (45) e L (60)
+# ============================================================================
+
 ANGULOS_PLACA = {
-    "45 HT": {"descricao": "45° High Theta - Alta Eficiência Térmica", "multiplicador_u": 1.4, "turbulencia": "Alta", "queda_pressao": "Alta", "reynolds_min": 0, "aplicacao": "Máxima transferência térmica, vazões menores, pressão baixa aceitável"},
-    "60 LT": {"descricao": "60° Low Theta - Baixa Queda de Pressão", "multiplicador_u": 1.0, "turbulencia": "Moderada", "queda_pressao": "Baixa", "reynolds_min": 1500, "aplicacao": "Eficiência balanceada, vazões maiores, pressão crítica"}
+    "H (45°)": {
+        "descricao": "H = 45° — Alta turbulencia, alta transferencia termica",
+        "multiplicador_u": 1.4,
+        "turbulencia": "Alta",
+        "queda_pressao": "Alta",
+        "reynolds_min": 0,
+        "aplicacao": "Maxima transferencia termica, vazoes menores, pressao baixa aceitavel",
+        "combinações": "HH=45° | HL=52.5° | LL=60°"
+    },
+    "L (60°)": {
+        "descricao": "L = 60° — Menor queda de pressao, eficiencia balanceada",
+        "multiplicador_u": 1.0,
+        "turbulencia": "Moderada",
+        "queda_pressao": "Baixa",
+        "reynolds_min": 1500,
+        "aplicacao": "Eficiencia balanceada, vazoes maiores, pressao critica",
+        "combinações": "HH=45° | HL=52.5° | LL=60°"
+    }
 }
+
+# ============================================================================
+# ESTILOS PDF
+# ============================================================================
 
 styles_doc = getSampleStyleSheet()
 st_tit = ParagraphStyle('T1', parent=styles_doc['Heading1'], fontName='Helvetica-Bold', fontSize=22, textColor=colors.HexColor('#0d1b2a'))
@@ -85,11 +133,9 @@ class NumberedCanvas(canvas.Canvas):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._saved_page_states = []
-
     def showPage(self):
         self._saved_page_states.append(dict(self.__dict__))
         self._startPage()
-
     def save(self):
         num_pages = len(self._saved_page_states)
         for state in self._saved_page_states:
@@ -102,132 +148,379 @@ class NumberedCanvas(canvas.Canvas):
             super().showPage()
         super().save()
 
-def calculate_reynolds(vazao_kg_h: float, viscosidade: float, densidade: float, dh: float) -> float:
-    if vazao_kg_h <= 0 or viscosidade <= 0 or densidade <= 0: return 0
+# ============================================================================
+# FUNCOES DE CALCULO
+# ============================================================================
+
+def calculate_reynolds(vazao_kg_h, viscosidade, densidade, dh):
+    if vazao_kg_h <= 0 or viscosidade <= 0 or densidade <= 0:
+        return 0
     vazao_m3_s = (vazao_kg_h / 3600.0) / densidade
     area_canal = 0.0001
     u = vazao_m3_s / area_canal
     viscosidade_pa_s = viscosidade * 0.001
     return (densidade * u * dh) / viscosidade_pa_s
 
-def classificar_turbulencia(reynolds: float) -> tuple:
-    if reynolds < 500: return ('Laminar', 'Regime laminar - Transferência de calor limitada')
-    elif reynolds < 2000: return ('Transicional', 'Transição laminar-turbulento - Eficiência moderada')
-    else: return ('Turbulento', 'Regime turbulento - Ótima eficiência de transferência')
+def classificar_turbulencia(reynolds):
+    if reynolds < 500:
+        return ('Laminar', 'Regime laminar - Transferencia de calor limitada')
+    elif reynolds < 2000:
+        return ('Transicional', 'Transicao laminar-turbulento - Eficiencia moderada')
+    else:
+        return ('Turbulento', 'Regime turbulento - Otima eficiencia de transferencia')
 
-def recomendar_angulo_placa(reynolds_prod: float, reynolds_serv: float, pressao_max: float) -> tuple:
+def recomendar_angulo_placa(reynolds_prod, reynolds_serv, pressao_max):
     reynolds_min = min(reynolds_prod, reynolds_serv)
-    if reynolds_min < 500: return ('45 HT', ANGULOS_PLACA['45 HT']['multiplicador_u'], 'Reynolds baixo detectado. Placa 45 HT recomendada para máxima turbulência.')
-    elif reynolds_min > 2000: return ('60 LT', ANGULOS_PLACA['60 LT']['multiplicador_u'], 'Reynolds alto (turbulento). Placa 60 LT recomendada para menor queda de pressão.')
-    else: return ('45 HT', ANGULOS_PLACA['45 HT']['multiplicador_u'], 'Reynolds transicional. Placa 45 HT recomendada para otimizar transferência.')
+    if reynolds_min < 500:
+        return ('H (45°)', ANGULOS_PLACA['H (45°)']['multiplicador_u'],
+                'Reynolds baixo detectado. Placa H (45°) recomendada para maxima turbulencia.')
+    elif reynolds_min > 2000:
+        return ('L (60°)', ANGULOS_PLACA['L (60°)']['multiplicador_u'],
+                'Reynolds alto (turbulento). Placa L (60°) recomendada para menor queda de pressao.')
+    else:
+        return ('H (45°)', ANGULOS_PLACA['H (45°)']['multiplicador_u'],
+                'Reynolds transicional. Placa H (45°) recomendada para otimizar transferencia.')
 
-def get_viscosity_factor(dados_fluido: dict) -> float:
+def get_viscosity_factor(dados_fluido):
     viscosidade = dados_fluido.get('viscosidade', 1.0)
-    if viscosidade <= 0 or viscosidade == BANCO_FLUIDOS['Agua']['viscosidade']: return 1.0
+    if viscosidade <= 0 or viscosidade == BANCO_FLUIDOS['Agua']['viscosidade']:
+        return 1.0
     return 1.0 / math.sqrt(viscosidade)
 
-def calculate_lmtd(dt1: float, dt2: float) -> float:
+def calculate_lmtd(dt1, dt2):
     dt1_abs, dt2_abs = abs(dt1), abs(dt2)
-    if dt1_abs < 1e-6 and dt2_abs < 1e-6: return 1.0
-    if abs(dt1_abs - dt2_abs) < 1e-6: return max(dt1_abs, dt2_abs, 1.0)
-    if dt1_abs > 0 and dt2_abs > 0: return abs((dt1_abs - dt2_abs) / math.log(dt1_abs / dt2_abs))
+    if dt1_abs < 1e-6 and dt2_abs < 1e-6:
+        return 1.0
+    if abs(dt1_abs - dt2_abs) < 1e-6:
+        return max(dt1_abs, dt2_abs, 1.0)
+    if dt1_abs > 0 and dt2_abs > 0:
+        return abs((dt1_abs - dt2_abs) / math.log(dt1_abs / dt2_abs))
     return max(dt1_abs, dt2_abs, 1.0)
 
-def calculate_dimensionamento(produto: str, dados_fluido: dict, modelo: str, dados_modelo: dict, t_in_prod: float, t_out_prod: float, t_in_serv: float, t_out_serv: float, vazao_prod: float, dados_servico: dict) -> dict:
+def calculate_dimensionamento(produto, dados_fluido, modelo, dados_modelo,
+                              t_in_prod, t_out_prod, t_in_serv, t_out_serv,
+                              vazao_prod, dados_servico):
     cp_prod, cp_serv = dados_fluido['cp'], dados_servico['cp']
-    densidade_prod, densidade_serv = dados_fluido.get('densidade', 1000), dados_servico.get('densidade', 1000)
-    viscosidade_prod, viscosidade_serv = dados_fluido.get('viscosidade', 1.0), dados_servico.get('viscosidade', 1.0)
+    densidade_prod = dados_fluido.get('densidade', 1000)
+    densidade_serv = dados_servico.get('densidade', 1000)
+    viscosidade_prod = dados_fluido.get('viscosidade', 1.0)
+    viscosidade_serv = dados_servico.get('viscosidade', 1.0)
     area_por_placa = dados_modelo['area_placa']
     pressao_max = dados_modelo.get('pressao_max', 25)
     dh = dados_modelo.get('dh', 0.005)
+
     reynolds_prod = calculate_reynolds(vazao_prod, viscosidade_prod, densidade_prod, dh)
     dT_prod = abs(t_in_prod - t_out_prod)
     carga_kw = (vazao_prod * cp_prod * dT_prod) / 3600.0
+
     delta_t_serv = abs(t_out_serv - t_in_serv)
     vazao_serv = (carga_kw * 3600.0) / (cp_serv * delta_t_serv) if delta_t_serv > 0 else 0.0
     reynolds_serv = calculate_reynolds(vazao_serv, viscosidade_serv, densidade_serv, dh)
+
     regime_prod, desc_prod = classificar_turbulencia(reynolds_prod)
     regime_serv, desc_serv = classificar_turbulencia(reynolds_serv)
-    tipo_placa, multiplicador_u, justificativa_angulo = recomendar_angulo_placa(reynolds_prod, reynolds_serv, pressao_max)
+
+    tipo_placa, multiplicador_u, justificativa_angulo = recomendar_angulo_placa(
+        reynolds_prod, reynolds_serv, pressao_max)
+
     fator_viscosidade = get_viscosity_factor(dados_fluido)
-    U_adotado = dados_modelo['U_base'] * Fator_viscosidade * multiplicador_u
-    dt1, dt2 = t_in_prod - t_out_serv, t_out_prod - t_in_serv
+    U_adotado = dados_modelo['U_base'] * fator_viscosidade * multiplicador_u
+
+    dt1 = t_in_prod - t_out_serv
+    dt2 = t_out_prod - t_in_serv
     lmtd = calculate_lmtd(dt1, dt2)
+
     area_m2 = (carga_kw * 1000.0) / (U_adotado * lmtd) if lmtd > 0 else 0.0
     placas = math.ceil(area_m2 / area_por_placa) + 2
-    if placas % 2 != 0: placas += 1
-    return {'carga_kw': carga_kw, 'vazao_serv': vazao_serv, 'lmtd': lmtd, 'area_m2': area_m2, 'placas': placas, 'area_por_placa': area_por_placa, 'U_adotado': U_adotado, 'U_base': dados_modelo['U_base'], 'fator_viscosidade': fator_viscosidade, 'multiplicador_placa': multiplicador_u, 'reynolds_prod': reynolds_prod, 'reynolds_serv': reynolds_serv, 'regime_prod': regime_prod, 'regime_serv': regime_serv, 'desc_prod': desc_prod, 'desc_serv': desc_serv, 'tipo_placa': tipo_placa, 'justificativa_placa': justificativa_angulo}
+    if placas % 2 != 0:
+        placas += 1
 
-def generate_parecer_ia(modelo: str, tag: str, projeto: str, produto: str, servico: str, vazao_prod: float, resultados: dict, tipo_modelo: str) -> str:
-    contexto = {'dados': {'Modelo': modelo, 'Tipo': tipo_modelo, 'Tag': tag, 'Projeto': projeto, 'Produto': produto, 'Servico': servico, 'Vazao': vazao_prod}, 'turbulencia': {'Reynolds_Produto': round(resultados['reynolds_prod'], 0), 'Regime_Produto': resultados['regime_prod'], 'Reynolds_Servico': round(resultados['reynolds_serv'], 0), 'Regime_Servico': resultados['regime_serv']}, 'configuracao_recomendada': {'Tipo_Placa': resultados['tipo_placa']}, 'calculado': {'kw': round(resultados['carga_kw'], 2), 'placas': resultados['placas'], 'area': round(resultados['area_m2'], 2), 'area_unitaria_placa': resultados['area_por_placa']}}
-    prompt = f"Atue como Engenheiro Quimico Senior Especialista em Trocadores de Calor da AlfaVed. Analise: {json.dumps(contexto)}. Escreva um Parecer Tecnico Descritivo (maximo 180 words) focando em: 1) Material das gaxetas adequado para {produto} e {servico}; 2) Análise do regime de turbulência (Reynolds) para eficiência térmica; 3) Configuração recomendada com placa {resultados['tipo_placa']}; 4) Risco de incrustação e avaliação se o arranjo de {resultados['placas']} placas do modelo {modelo} atende com segurança. Retorne APENAS o texto corrido do parecer, sem markdown e sem asteriscos."
+    return {
+        'carga_kw': carga_kw, 'vazao_serv': vazao_serv, 'lmtd': lmtd,
+        'area_m2': area_m2, 'placas': placas, 'area_por_placa': area_por_placa,
+        'U_adotado': U_adotado, 'U_base': dados_modelo['U_base'],
+        'fator_viscosidade': fator_viscosidade, 'multiplicador_placa': multiplicador_u,
+        'reynolds_prod': reynolds_prod, 'reynolds_serv': reynolds_serv,
+        'regime_prod': regime_prod, 'regime_serv': regime_serv,
+        'desc_prod': desc_prod, 'desc_serv': desc_serv,
+        'tipo_placa': tipo_placa, 'justificativa_placa': justificativa_angulo,
+        'linha_modelo': dados_modelo.get('linha', 'N/A'),
+        'conexao': dados_modelo.get('conexao', 'N/A'),
+        'material_modelo': dados_modelo.get('material', 'N/A'),
+    }
+
+# ============================================================================
+# PARECER IA
+# ============================================================================
+
+def generate_parecer_ia(modelo, tag, projeto, produto, servico, vazao_prod, resultados, tipo_modelo):
+    contexto = {
+        'dados': {
+            'Modelo': modelo, 'Tipo': tipo_modelo, 'Linha': resultados.get('linha_modelo', 'N/A'),
+            'Tag': tag, 'Projeto': projeto, 'Produto': produto, 'Servico': servico, 'Vazao': vazao_prod
+        },
+        'turbulencia': {
+            'Reynolds_Produto': round(resultados['reynolds_prod'], 0),
+            'Regime_Produto': resultados['regime_prod'],
+            'Reynolds_Servico': round(resultados['reynolds_serv'], 0),
+            'Regime_Servico': resultados['regime_serv']
+        },
+        'configuracao_recomendada': {'Tipo_Placa': resultados['tipo_placa']},
+        'calculado': {
+            'kw': round(resultados['carga_kw'], 2),
+            'placas': resultados['placas'],
+            'area': round(resultados['area_m2'], 2),
+            'area_unitaria_placa': resultados['area_por_placa'],
+            'U_adotado': round(resultados['U_adotado'], 0)
+        }
+    }
+    prompt = (
+        f"Atue como Engenheiro Quimico Senior Especialista em Trocadores de Calor da AlfaVed. "
+        f"Analise: {json.dumps(contexto)}. Escreva um Parecer Tecnico Descritivo (maximo 180 words) "
+        f"focando em: 1) Material das gaxetas adequado para {produto} e {servico}; "
+        f"2) Analise do regime de turbulencia (Reynolds) para eficiencia termica; "
+        f"3) Configuracao recomendada com placa {resultados['tipo_placa']}; "
+        f"4) Risco de incrustacao e avaliacao se o arranjo de {resultados['placas']} placas "
+        f"do modelo {modelo} atende com segurança. "
+        f"Retorne APENAS o texto corrido do parecer, sem markdown e sem asteriscos."
+    )
     try:
         chave_segura = st.secrets['GEMINI_API_KEY']
         client = genai.Client(api_key=chave_segura)
-        response = client.models.generate_content(model='gemini-flash-latest', contents=prompt, config=dict(temperature=0.2))
+        response = client.models.generate_content(
+            model='gemini-flash-latest', contents=prompt, config=dict(temperature=0.2))
         return response.text.strip().replace('*', '')
     except Exception:
-        return f"Parecer tecnico AlfaVed local. Processamento para {produto} em {modelo} ({tipo_modelo}) com servico {servico} indica demanda termica de {resultados['carga_kw']:.2f} kW. Reynolds Produto: {resultados['reynolds_prod']:.0f} ({resultados['regime_prod']}). Reynolds Servico: {resultados['reynolds_serv']:.0f} ({resultados['regime_serv']}). Placa recomendada: {resultados['tipo_placa']} - {resultados['justificativa_placa']} Gaxetas EPDM para laticinios ou NBR para oleos. Arranjo de {resultados['placas']} placas aprovado."
+        return (
+            f"Parecer tecnico AlfaVed local. Processamento para {produto} em {modelo} "
+            f"({tipo_modelo}, linha {resultados.get('linha_modelo', 'N/A')}) com servico {servico} "
+            f"indica demanda termica de {resultados['carga_kw']:.2f} kW. "
+            f"Reynolds Produto: {resultados['reynolds_prod']:.0f} ({resultados['regime_prod']}). "
+            f"Reynolds Servico: {resultados['reynolds_serv']:.0f} ({resultados['regime_serv']}). "
+            f"Placa recomendada: {resultados['tipo_placa']} - {resultados['justificativa_placa']} "
+            f"Gaxetas EPDM para laticinios ou NBR para oleos. "
+            f"Arranjo de {resultados['placas']} placas aprovado. "
+            f"Material: {resultados.get('material_modelo', 'N/A')}. Conexao: {resultados.get('conexao', 'N/A')}."
+        )
 
-def build_pdf(modelo: str, tag: str, projeto: str, produto: str, servico: str, t_in_prod: float, t_out_prod: float, t_in_serv: float, t_out_serv: float, vazao_prod: float, vazao_serv: float, resultados: dict, parecer_ia: str, tipo_modelo: str) -> bytes:
+# ============================================================================
+# GERACAO PDF
+# ============================================================================
+
+def build_pdf(modelo, tag, projeto, produto, servico,
+             t_in_prod, t_out_prod, t_in_serv, t_out_serv,
+             vazao_prod, vazao_serv, resultados, parecer_ia, tipo_modelo):
     pdf_buffer = io.BytesIO()
-    doc = SimpleDocTemplate(pdf_buffer, pagesize=letter, rightMargin=54, leftMargin=54, topMargin=54, bottomMargin=54)
-    story = [Paragraph('AlfaVed Solucoes Industriais', st_tit), Paragraph('DATASHEET TECNICO - ENGENHARIA ASSISTIDA POR IA', st_sub), Spacer(1, 10)]
+    doc = SimpleDocTemplate(pdf_buffer, pagesize=letter,
+                            rightMargin=54, leftMargin=54, topMargin=54, bottomMargin=54)
+    story = [
+        Paragraph('AlfaVed Solucoes Industriais', st_tit),
+        Paragraph('DATASHEET TECNICO - ENGENHARIA ASSISTIDA POR IA', st_sub),
+        Spacer(1, 10)
+    ]
+
+    # Secao 1: Informacoes Gerais
     story.append(Paragraph('1. Informacoes Gerais do Projeto', st_h2))
-    story.append(Table([[Paragraph('Item', st_th), Paragraph('Especificacao', st_th)], [Paragraph('Modelo Selecionado', st_tc), Paragraph(modelo, st_tc)], [Paragraph('Tipo de Modelo', st_tc), Paragraph(tipo_modelo, st_tc)], [Paragraph('Tag', st_tc), Paragraph(tag, st_tc)], [Paragraph('Projeto', st_tc), Paragraph(projeto, st_tc)]]))
+    story.append(Table([
+        [Paragraph('Item', st_th), Paragraph('Especificacao', st_th)],
+        [Paragraph('Modelo Selecionado', st_tc), Paragraph(modelo, st_tc)],
+        [Paragraph('Tipo de Modelo', st_tc), Paragraph(tipo_modelo, st_tc)],
+        [Paragraph('Linha de Produto', st_tc), Paragraph(resultados.get('linha_modelo', 'N/A'), st_tc)],
+        [Paragraph('Tag', st_tc), Paragraph(tag, st_tc)],
+        [Paragraph('Projeto', st_tc), Paragraph(projeto, st_tc)],
+        [Paragraph('Material Placa', st_tc), Paragraph(resultados.get('material_modelo', 'N/A'), st_tc)],
+        [Paragraph('Conexao', st_tc), Paragraph(resultados.get('conexao', 'N/A'), st_tc)],
+    ]))
+
+    # Secao 2: Parametros Operacionais
     story.append(Paragraph('2. Parametros Operacionais Processados', st_h2))
-    story.append(Table([[Paragraph('Propriedade', st_th), Paragraph('Lado do Produto', st_th), Paragraph('Lado do Servico', st_th)], [Paragraph('Fluido', st_tc), Paragraph(produto, st_tc), Paragraph(servico, st_tc)], [Paragraph('Temp Entrada', st_tc), Paragraph(f'{t_in_prod} °C', st_tc), Paragraph(f'{t_in_serv} °C', st_tc)], [Paragraph('Temp Saida', st_tc), Paragraph(f'{t_out_prod} °C', st_tc), Paragraph(f'{t_out_serv} °C', st_tc)], [Paragraph('Vazao Massica', st_tc), Paragraph(f'{vazao_prod} kg/h', st_tc), Paragraph(f'{vazao_serv:.1f} kg/h', st_tc)]]))
+    story.append(Table([
+        [Paragraph('Propriedade', st_th), Paragraph('Lado do Produto', st_th), Paragraph('Lado do Servico', st_th)],
+        [Paragraph('Fluido', st_tc), Paragraph(produto, st_tc), Paragraph(servico, st_tc)],
+        [Paragraph('Temp Entrada', st_tc), Paragraph(f'{t_in_prod} C', st_tc), Paragraph(f'{t_in_serv} C', st_tc)],
+        [Paragraph('Temp Saida', st_tc), Paragraph(f'{t_out_prod} C', st_tc), Paragraph(f'{t_out_serv} C', st_tc)],
+        [Paragraph('Vazao Massica', st_tc), Paragraph(f'{vazao_prod} kg/h', st_tc), Paragraph(f'{vazao_serv:.1f} kg/h', st_tc)],
+    ]))
+
+    # Secao 3: Analise de Turbulencia
     story.append(Paragraph('3. Analise de Turbulencia - Numero de Reynolds', st_h2))
-    story.append(Table([[Paragraph('Parâmetro', st_th), Paragraph('Lado Produto', st_th), Paragraph('Lado Serviço', st_th)], [Paragraph('Número de Reynolds', st_tc), Paragraph(f'{resultados["reynolds_prod"]:.0f}', st_tc), Paragraph(f'{resultados["reynolds_serv"]:.0f}', st_tc)], [Paragraph('Regime Escoamento', st_tc), Paragraph(resultados['regime_prod'], st_tc), Paragraph(resultados['regime_serv'], st_tc)], [Paragraph('Descrição', st_tc), Paragraph(resultados['desc_prod'], st_tc), Paragraph(resultados['desc_serv'], st_tc)]]))
+    story.append(Table([
+        [Paragraph('Parametro', st_th), Paragraph('Lado Produto', st_th), Paragraph('Lado Servico', st_th)],
+        [Paragraph('Numero de Reynolds', st_tc), Paragraph(f'{resultados["reynolds_prod"]:.0f}', st_tc), Paragraph(f'{resultados["reynolds_serv"]:.0f}', st_tc)],
+        [Paragraph('Regime Escoamento', st_tc), Paragraph(resultados['regime_prod'], st_tc), Paragraph(resultados['regime_serv'], st_tc)],
+        [Paragraph('Descricao', st_tc), Paragraph(resultados['desc_prod'], st_tc), Paragraph(resultados['desc_serv'], st_tc)],
+    ]))
+
+    # Secao 4: Configuracao de Placa
     story.append(Paragraph('4. Configuracao de Placa Alfa Laval Recomendada', st_h2))
     placa_info = ANGULOS_PLACA[resultados['tipo_placa']]
-    story.append(Table([[Paragraph('Especificacao', st_th), Paragraph('Valor', st_th)], [Paragraph('Tipo de Placa', st_tc), Paragraph(resultados['tipo_placa'], st_tc)], [Paragraph('Descricao', st_tc), Paragraph(placa_info['descricao'], st_tc)], [Paragraph('Turbulência', st_tc), Paragraph(placa_info['turbulencia'], st_tc)], [Paragraph('Queda de Pressao', st_tc), Paragraph(placa_info['queda_pressao'], st_tc)], [Paragraph('Justificativa', st_tc), Paragraph(resultados['justificativa_placa'], st_tc)]]))
+    story.append(Table([
+        [Paragraph('Especificacao', st_th), Paragraph('Valor', st_th)],
+        [Paragraph('Tipo de Placa', st_tc), Paragraph(resultados['tipo_placa'], st_tc)],
+        [Paragraph('Descricao', st_tc), Paragraph(placa_info['descricao'], st_tc)],
+        [Paragraph('Turbulencia', st_tc), Paragraph(placa_info['turbulencia'], st_tc)],
+        [Paragraph('Queda de Pressao', st_tc), Paragraph(placa_info['queda_pressao'], st_tc)],
+        [Paragraph('Combinacoes de Canal', st_tc), Paragraph(placa_info.get('combinações', 'HH=45 | HL=52.5 | LL=60'), st_tc)],
+        [Paragraph('Justificativa', st_tc), Paragraph(resultados['justificativa_placa'], st_tc)],
+    ]))
+
+    # Secao 5: Resultados
     story.append(Paragraph('5. Resultados do Dimensionamento Hidro-Termico', st_h2))
-    story.append(Table([[Paragraph('Grandeza de Engenharia', st_th), Paragraph('Valor Calculado', st_th)], [Paragraph('Carga Termica', st_tc), Paragraph(f'{resultados["carga_kw"]:.2f} kW', st_tc)], [Paragraph('LMTD', st_tc), Paragraph(f'{resultados["lmtd"]:.2f} °C', st_tc)], [Paragraph('Coeficiente U Base', st_tc), Paragraph(f'{resultados["U_base"]:.0f} W/m²K', st_tc)], [Paragraph('Fator Viscosidade', st_tc), Paragraph(f'{resultados["fator_viscosidade"]:.3f}', st_tc)], [Paragraph('Multiplicador Placa', st_tc), Paragraph(f'{resultados["multiplicador_placa"]:.2f}x', st_tc)], [Paragraph('Coeficiente U Adotado', st_tc), Paragraph(f'{resultados["U_adotado"]:.0f} W/m²K', st_tc)], [Paragraph('Area Efetiva Requerida', st_tc), Paragraph(f'{resultados["area_m2"]:.2f} m²', st_tc)], [Paragraph('Area por Placa', st_tc), Paragraph(f'{resultados["area_por_placa"]} m²', st_tc)], [Paragraph('Quantidade de Placas', st_tc), Paragraph(f'{resultados["placas"]} placas', st_tc)]]))
+    story.append(Table([
+        [Paragraph('Grandeza de Engenharia', st_th), Paragraph('Valor Calculado', st_th)],
+        [Paragraph('Carga Termica', st_tc), Paragraph(f'{resultados["carga_kw"]:.2f} kW', st_tc)],
+        [Paragraph('LMTD', st_tc), Paragraph(f'{resultados["lmtd"]:.2f} C', st_tc)],
+        [Paragraph('Coeficiente U Base', st_tc), Paragraph(f'{resultados["U_base"]:.0f} W/m2K', st_tc)],
+        [Paragraph('Fator Viscosidade', st_tc), Paragraph(f'{resultados["fator_viscosidade"]:.3f}', st_tc)],
+        [Paragraph('Multiplicador Placa', st_tc), Paragraph(f'{resultados["multiplicador_placa"]:.2f}x', st_tc)],
+        [Paragraph('Coeficiente U Adotado', st_tc), Paragraph(f'{resultados["U_adotado"]:.0f} W/m2K', st_tc)],
+        [Paragraph('Area Efetiva Requerida', st_tc), Paragraph(f'{resultados["area_m2"]:.2f} m2', st_tc)],
+        [Paragraph('Area por Placa', st_tc), Paragraph(f'{resultados["area_por_placa"]} m2', st_tc)],
+        [Paragraph('Quantidade de Placas', st_tc), Paragraph(f'{resultados["placas"]} placas', st_tc)],
+    ]))
+
     for item in story:
-        if isinstance(item, Table): item.setStyle(TableStyle([('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#0d1b2a')), ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#cccccc')), ('BOTTOMPADDING', (0, 0), (-1, -1), 5), ('TOPPADDING', (0, 0), (-1, -1), 5)]))
-    story.append(Paragraph('6. Parecer Técnico e Memorial Descritivo (AlfaVed GenAI)', st_h2))
+        if isinstance(item, Table):
+            item.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#0d1b2a')),
+                ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#cccccc')),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
+                ('TOPPADDING', (0, 0), (-1, -1), 5),
+            ]))
+
+    # Secao 6: Parecer IA
+    story.append(Paragraph('6. Parecer Tecnico e Memorial Descritivo (AlfaVed GenAI)', st_h2))
     story.append(Paragraph(parecer_ia, st_body))
+
     doc.build(story, canvasmaker=NumberedCanvas)
     pdf_data = pdf_buffer.getvalue()
     pdf_buffer.close()
     return pdf_data
 
-def main() -> None:
-    st.markdown('<style>.main-header { background: linear-gradient(135deg, #0d1b2a 0%, #003049 100%); color: white; padding: 30px; border-radius: 10px; margin-bottom: 30px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); } .section-card { background-color: #f8f9fa; border-left: 4px solid #0d1b2a; padding: 15px; border-radius: 5px; margin: 10px 0; } .metric-box { background: linear-gradient(135deg, #003049 0%, #1f5a6f 100%); color: white; padding: 20px; border-radius: 8px; text-align: center; } .result-success { background-color: #d4edda; border-left: 4px solid #28a745; padding: 15px; border-radius: 5px; } .result-warning { background-color: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; border-radius: 5px; }</style>', unsafe_allow_html=True)
-    st.markdown('<div class="main-header"><h1>▲ AlfaVed Engenharia Térmica</h1><h3>Dimensionador Inteligente de Trocadores de Calor</h3><p>Análise de Turbulência | Recomendação de Placas | Parecer Técnico com IA</p></div>', unsafe_allow_html=True)
+# ============================================================================
+# INTERFACE STREAMLIT
+# ============================================================================
+
+def main():
+    st.markdown("""
+    <style>
+    .main-header { background: linear-gradient(135deg, #0d1b2a 0%, #003049 100%); color: white; padding: 30px; border-radius: 10px; margin-bottom: 30px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+    .section-card { background-color: #f8f9fa; border-left: 4px solid #0d1b2a; padding: 15px; border-radius: 5px; margin: 10px 0; }
+    .metric-box { background: linear-gradient(135deg, #003049 0%, #1f5a6f 100%); color: white; padding: 20px; border-radius: 8px; text-align: center; }
+    .result-success { background-color: #d4edda; border-left: 4px solid #28a745; padding: 15px; border-radius: 5px; }
+    .result-warning { background-color: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; border-radius: 5px; }
+    .linha-badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; }
+    .badge-baseline { background: #e3f2fd; color: #1565c0; }
+    .badge-mline { background: #e8f5e9; color: #2e7d32; }
+    .badge-widegap { background: #fff3e0; color: #e65100; }
+    .badge-semiwelded { background: #fce4ec; color: #c62828; }
+    </style>
+    """, unsafe_allow_html=True)
+
+    st.markdown("""
+    <div class="main-header">
+        <h1>▲ AlfaVed Engenharia Termica</h1>
+        <h3>Dimensionador Inteligente de Trocadores de Calor</h3>
+        <p>Banco Alfa Laval | B/M Variants | H=45° L=60° | Semi-Soldadas | WideGap | Parecer com IA</p>
+    </div>
+    """, unsafe_allow_html=True)
+
     input_col, result_col = st.columns([1, 1.2], gap='large')
+
     with input_col:
         st.markdown('### 📋 DADOS DE PROJETO')
+
         with st.form('form_dimensionamento', clear_on_submit=False):
-            st.markdown('#### 📌 Informações do Projeto')
+            st.markdown('#### 📌 Informacoes do Projeto')
             tag = st.text_input('Tag do Equipamento', 'TC-101', key='tag_input')
-            projeto = st.text_input('Número do Projeto', 'PRJ-ALFAVED-2026', key='proj_input')
+            projeto = st.text_input('Numero do Projeto', 'PRJ-ALFAVED-2026', key='proj_input')
+
             st.divider()
-            st.markdown('#### ⚙️ Seleção do Modelo')
-            modelo = st.selectbox('Modelo Alfa Laval', list(BANCO_MODELOS.keys()), key='modelo_input')
-            tipo_modelo = BANCO_MODELOS[modelo]['tipo'].upper()
-            st.caption(f'Tipo: **{tipo_modelo}** | Pressão Máx: **{BANCO_MODELOS[modelo]["pressao_max"]} bar**')
+            st.markdown('#### ⚙️ Selecao do Modelo')
+
+            # Filtro por categoria
+            filtro_cat = st.selectbox(
+                'Filtrar por Categoria',
+                ['Todos', 'Gaxetados (Simplis)', 'Semi-Soldados (Gases)'],
+                key='filtro_cat'
+            )
+
+            if filtro_cat == 'Gaxetados (Simplis)':
+                modelos_filtrados = list(BANCO_MODELOS_GAXETADOS.keys())
+            elif filtro_cat == 'Semi-Soldados (Gases)':
+                modelos_filtrados = list(BANCO_MODELOS_SEMI_SOLDADOS.keys())
+            else:
+                modelos_filtrados = list(BANCO_MODELOS.keys())
+
+            modelo = st.selectbox('Modelo Alfa Laval', modelos_filtrados, key='modelo_input')
+            dados_mod = BANCO_MODELOS[modelo]
+            tipo_modelo = dados_mod['tipo'].upper()
+            linha_mod = dados_mod.get('linha', 'N/A')
+
+            # Badge da linha
+            badge_class = {
+                'BaseLine': 'badge-baseline',
+                'M-line': 'badge-mline',
+                'WideGap': 'badge-widegap',
+                'Semi-Welded': 'badge-semiwelded'
+            }.get(linha_mod, 'badge-baseline')
+
+            st.markdown(
+                f"<span class='linha-badge {badge_class}'>{linha_mod}</span> "
+                f"| Tipo: <strong>{tipo_modelo}</strong> | "
+                f"P Max: <strong>{dados_mod['pressao_max']} bar</strong> | "
+                f"T Max: <strong>{dados_mod['temp_max']}°C</strong>",
+                unsafe_allow_html=True
+            )
+
+            if dados_mod.get('canal_soldado'):
+                st.caption(f"Canal soldado: **{dados_mod['canal_soldado']}** | Aplicacao: {dados_mod.get('aplicacao', 'N/A')}")
+            if dados_mod.get('canal'):
+                st.caption(f"Configuracoes de canal: **{dados_mod['canal']}**")
+
             st.divider()
             st.markdown('#### 🔴 Lado do Produto')
             col_prod1, col_prod2 = st.columns(2)
-            with col_prod1: produto = st.selectbox('Fluido do Produto', list(BANCO_FLUIDOS.keys()), key='prod_input')
-            with col_prod2: vazao_prod = st.number_input('Vazão (kg/h)', value=5000.0, min_value=1.0, key='vazao_prod')
+            with col_prod1:
+                produto = st.selectbox('Fluido do Produto', list(BANCO_FLUIDOS.keys()), key='prod_input')
+            with col_prod2:
+                vazao_prod = st.number_input('Vazao (kg/h)', value=5000.0, min_value=1.0, key='vazao_prod')
+
             col_temp_prod1, col_temp_prod2 = st.columns(2)
-            with col_temp_prod1: t_in_prod = st.number_input('Temp. Entrada (°C)', value=90.0, key='t_in_prod_input')
-            with col_temp_prod2: t_out_prod = st.number_input('Temp. Saída (°C)', value=8.0, key='t_out_prod_input')
+            with col_temp_prod1:
+                t_in_prod = st.number_input('Temp. Entrada (°C)', value=90.0, key='t_in_prod_input')
+            with col_temp_prod2:
+                t_out_prod = st.number_input('Temp. Saida (°C)', value=8.0, key='t_out_prod_input')
+
             st.divider()
-            st.markdown('#### 🔵 Lado do Serviço')
-            servico = st.selectbox('Fluido de Serviço', list(BANCO_SERVICOS.keys()), key='serv_input')
+            st.markdown('#### 🔵 Lado do Servico')
+            servico = st.selectbox('Fluido de Servico', list(BANCO_SERVICOS.keys()), key='serv_input')
+
             col_temp_serv1, col_temp_serv2 = st.columns(2)
-            with col_temp_serv1: t_in_serv = st.number_input('Temp. Entrada (°C)', value=0.0, key='t_in_serv_input')
-            with col_temp_serv2: t_out_serv = st.number_input('Temp. Saída (°C)', value=12.0, key='t_out_serv_input')
+            with col_temp_serv1:
+                t_in_serv = st.number_input('Temp. Entrada (°C)', value=0.0, key='t_in_serv_input')
+            with col_temp_serv2:
+                t_out_serv = st.number_input('Temp. Saida (°C)', value=12.0, key='t_out_serv_input')
+
             st.divider()
             submitted = st.form_submit_button('🔄 CALCULAR DIMENSIONAMENTO', use_container_width=True, type='primary')
+
         if submitted:
-            resultados = calculate_dimensionamento(produto, BANCO_FLUIDOS[produto], modelo, BANCO_MODELOS[modelo], t_in_prod, t_out_prod, t_in_serv, t_out_serv, vazao_prod, BANCO_SERVICOS[servico])
-            parecer_ia = generate_parecer_ia(modelo, tag, projeto, produto, servico, vazao_prod, resultados, tipo_modelo)
-            pdf_bytes = build_pdf(modelo, tag, projeto, produto, servico, t_in_prod, t_out_prod, t_in_serv, t_out_serv, vazao_prod, resultados['vazao_serv'], resultados, parecer_ia, tipo_modelo)
+            resultados = calculate_dimensionamento(
+                produto, BANCO_FLUIDOS[produto], modelo, dados_mod,
+                t_in_prod, t_out_prod, t_in_serv, t_out_serv,
+                vazao_prod, BANCO_SERVICOS[servico]
+            )
+            parecer_ia = generate_parecer_ia(
+                modelo, tag, projeto, produto, servico,
+                vazao_prod, resultados, tipo_modelo
+            )
+            pdf_bytes = build_pdf(
+                modelo, tag, projeto, produto, servico,
+                t_in_prod, t_out_prod, t_in_serv, t_out_serv,
+                vazao_prod, resultados['vazao_serv'],
+                resultados, parecer_ia, tipo_modelo
+            )
             st.session_state.resultados = resultados
             st.session_state.parecer_ia = parecer_ia
             st.session_state.pdf_bytes = pdf_bytes
@@ -242,32 +535,93 @@ def main() -> None:
             st.session_state.t_in_serv_res = t_in_serv
             st.session_state.t_out_serv_res = t_out_serv
             st.session_state.vazao_prod_res = vazao_prod
-            st.success('✅ Cálculo e relatórios estruturados com sucesso!')
+            st.success('✅ Calculo e relatorios estruturados com sucesso!')
             st.rerun()
+
     with result_col:
         if 'resultados' in st.session_state:
             resultados = st.session_state.resultados
             st.markdown('### 📊 RESULTADOS DO DIMENSIONAMENTO')
+
             kpi_col1, kpi_col2, kpi_col3 = st.columns(3)
-            with kpi_col1: st.markdown('<div class="metric-box">', unsafe_allow_html=True); st.metric('Carga Térmica', f'{resultados["carga_kw"]:.2f} kW'); st.markdown('</div>', unsafe_allow_html=True)
-            with kpi_col2: st.markdown('<div class="metric-box">', unsafe_allow_html=True); st.metric('Área Requerida', f'{resultados["area_m2"]:.2f} m²'); st.markdown('</div>', unsafe_allow_html=True)
-            with kpi_col3: st.markdown('<div class="metric-box">', unsafe_allow_html=True); st.metric('Quantidade Placas', f'{resultados["placas"]}'); st.markdown('</div>', unsafe_allow_html=True)
+            with kpi_col1:
+                st.markdown('<div class="metric-box">', unsafe_allow_html=True)
+                st.metric('Carga Termica', f'{resultados["carga_kw"]:.2f} kW')
+                st.markdown('</div>', unsafe_allow_html=True)
+            with kpi_col2:
+                st.markdown('<div class="metric-box">', unsafe_allow_html=True)
+                st.metric('Area Requerida', f'{resultados["area_m2"]:.2f} m²')
+                st.markdown('</div>', unsafe_allow_html=True)
+            with kpi_col3:
+                st.markdown('<div class="metric-box">', unsafe_allow_html=True)
+                st.metric('Quantidade Placas', f'{resultados["placas"]}')
+                st.markdown('</div>', unsafe_allow_html=True)
+
             st.divider()
-            st.markdown('#### 🌊 Análise de Turbulência')
+            st.markdown('#### 🌊 Analise de Turbulencia')
             turb_col1, turb_col2 = st.columns(2)
-            with turb_col1: st.markdown('<div class="section-card">', unsafe_allow_html=True); st.markdown('**Lado Produto**'); st.metric('Reynolds', f'{resultados["reynolds_prod"]:.0f}', resultados['regime_prod']); st.caption(resultados['desc_prod']); st.markdown('</div>', unsafe_allow_html=True)
-            with turb_col2: st.markdown('<div class="section-card">', unsafe_allow_html=True); st.markdown('**Lado Serviço**'); st.metric('Reynolds', f'{resultados["reynolds_serv"]:.0f}', resultados['regime_serv']); st.caption(resultados['desc_serv']); st.markdown('</div>', unsafe_allow_html=True)
+            with turb_col1:
+                st.markdown('<div class="section-card">', unsafe_allow_html=True)
+                st.markdown('**Lado Produto**')
+                st.metric('Reynolds', f'{resultados["reynolds_prod"]:.0f}', resultados['regime_prod'])
+                st.caption(resultados['desc_prod'])
+                st.markdown('</div>', unsafe_allow_html=True)
+            with turb_col2:
+                st.markdown('<div class="section-card">', unsafe_allow_html=True)
+                st.markdown('**Lado Servico**')
+                st.metric('Reynolds', f'{resultados["reynolds_serv"]:.0f}', resultados['regime_serv'])
+                st.caption(resultados['desc_serv'])
+                st.markdown('</div>', unsafe_allow_html=True)
+
             st.divider()
-            st.markdown('#### 🎯 Configuração Recomendada')
+            st.markdown('#### 🎯 Configuracao Recomendada')
             placa_info = ANGULOS_PLACA[resultados['tipo_placa']]
             placa_col1, placa_col2 = st.columns(2)
-            with placa_col1: st.markdown(f'<div class="result-success"><h4>Tipo de Placa: <strong>{resultados["tipo_placa"]}</strong></h4><p>{placa_info["descricao"]}</p><hr><p><strong>Turbulência:</strong> {placa_info["turbulencia"]}</p><p><strong>Queda Pressão:</strong> {placa_info["queda_pressao"]}</p></div>', unsafe_allow_html=True)
-            with placa_col2: st.markdown(f'<div class="result-warning"><p><strong>Multiplicador U:</strong> {resultados["multiplicador_placa"]:.2f}x</p><p><strong>U Adotado:</strong> {resultados["U_adotado"]:.0f} W/m²K</p><p><strong>LMTD:</strong> {resultados["lmtd"]:.2f} °C</p></div>', unsafe_allow_html=True)
+            with placa_col1:
+                st.markdown(
+                    f'<div class="result-success">'
+                    f'<h4>Tipo de Placa: <strong>{resultados["tipo_placa"]}</strong></h4>'
+                    f'<p>{placa_info["descricao"]}</p><hr>'
+                    f'<p><strong>Turbulencia:</strong> {placa_info["turbulencia"]}</p>'
+                    f'<p><strong>Queda Pressao:</strong> {placa_info["queda_pressao"]}</p>'
+                    f'<p><strong>Combinacoes:</strong> {placa_info.get("combinações", "HH/HL/LL")}</p>'
+                    f'</div>',
+                    unsafe_allow_html=True
+                )
+            with placa_col2:
+                st.markdown(
+                    f'<div class="result-warning">'
+                    f'<p><strong>Multiplicador U:</strong> {resultados["multiplicador_placa"]:.2f}x</p>'
+                    f'<p><strong>U Adotado:</strong> {resultados["U_adotado"]:.0f} W/m²K</p>'
+                    f'<p><strong>LMTD:</strong> {resultados["lmtd"]:.2f} °C</p>'
+                    f'<p><strong>Linha:</strong> {resultados.get("linha_modelo", "N/A")}</p>'
+                    f'<p><strong>Material:</strong> {resultados.get("material_modelo", "N/A")}</p>'
+                    f'<p><strong>Conexao:</strong> {resultados.get("conexao", "N/A")}</p>'
+                    f'</div>',
+                    unsafe_allow_html=True
+                )
             st.info(f"💡 {resultados['justificativa_placa']}")
-            st.divider()
-            st.markdown('#### 📋 Documentação')
-            st.download_button(label='📥 Download Datasheet PDF', data=st.session_state.pdf_bytes, file_name='datasheet_alfaved.pdf', mime='application/pdf', use_container_width=True)
-            with st.expander('📄 Ver Parecer Técnico Completo'): st.markdown(f"**Parecer Técnico - AlfaVed GenAI**\n\n{st.session_state.parecer_ia}")
-        else: st.markdown('<div class="section-card"><p style="text-align: center; color: #999;">👈 Preencha os dados de entrada e clique em <strong>CALCULAR DIMENSIONAMENTO</strong></p></div>', unsafe_allow_html=True)
 
-if __name__ == '__main__': main()
+            st.divider()
+            st.markdown('#### 📋 Documentacao')
+            st.download_button(
+                label='📥 Download Datasheet PDF',
+                data=st.session_state.pdf_bytes,
+                file_name=f'datasheet_{st.session_state.get("tag_res", "TC")}.pdf',
+                mime='application/pdf',
+                use_container_width=True
+            )
+            with st.expander('📄 Ver Parecer Tecnico Completo'):
+                st.markdown(f"**Parecer Tecnico - AlfaVed GenAI**\n\n{st.session_state.parecer_ia}")
+        else:
+            st.markdown(
+                '<div class="section-card">'
+                '<p style="text-align: center; color: #999;">'
+                '👈 Preencha os dados de entrada e clique em '
+                '<strong>CALCULAR DIMENSIONAMENTO</strong>'
+                '</p></div>',
+                unsafe_allow_html=True
+            )
+
+if __name__ == '__main__':
+    main()
