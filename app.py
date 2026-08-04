@@ -1,7 +1,6 @@
 """
-AlfaVed Engenharia Térmica - Dimensionador PHE v2.1
+AlfaVed Engenharia Térmica - Dimensionador PHE v2.2
 Arquivo: app.py
-Deploy: streamlit run app.py
 """
 
 import io
@@ -9,11 +8,8 @@ import math
 import streamlit as st
 from datetime import datetime
 
-# ReportLab para PDF
 from reportlab.lib.pagesizes import A4
-from reportlab.platypus import (
-    SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
-)
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
 from reportlab.lib.units import cm
@@ -23,24 +19,24 @@ from reportlab.lib.units import cm
 # ============================================================================
 
 BANCO_MODELOS = {
-    "M3": {"area": 0.03, "Pmax": 16, "Tmax": 180, "dh": 0.003, "conn": "1.25\"", "cat": "Gaxetado", "placa_larg": 0.08, "placa_comp": 0.25, "canal_larg": 0.07, "esp": 0.0015},
-    "M6-B": {"area": 0.15, "Pmax": 10, "Tmax": 180, "dh": 0.005, "conn": "2\"", "cat": "Gaxetado", "placa_larg": 0.15, "placa_comp": 0.40, "canal_larg": 0.14, "esp": 0.0020},
-    "TS6M": {"area": 0.26, "Pmax": 25, "Tmax": 180, "dh": 0.006, "conn": "2.5\"", "cat": "Gaxetado", "placa_larg": 0.18, "placa_comp": 0.52, "canal_larg": 0.17, "esp": 0.0025},
-    "M10-B": {"area": 0.24, "Pmax": 10, "Tmax": 180, "dh": 0.006, "conn": "4\"", "cat": "Gaxetado", "placa_larg": 0.25, "placa_comp": 0.50, "canal_larg": 0.24, "esp": 0.0025},
-    "TS20M": {"area": 0.95, "Pmax": 25, "Tmax": 180, "dh": 0.009, "conn": "8\"", "cat": "Gaxetado", "placa_larg": 0.45, "placa_comp": 0.75, "canal_larg": 0.43, "esp": 0.0030},
-    "T20-B": {"area": 0.85, "Pmax": 10, "Tmax": 180, "dh": 0.009, "conn": "8\"", "cat": "Gaxetado", "placa_larg": 0.45, "placa_comp": 0.75, "canal_larg": 0.43, "esp": 0.0030},
-    "M15-B": {"area": 0.36, "Pmax": 10, "Tmax": 180, "dh": 0.008, "conn": "6\"", "cat": "Gaxetado", "placa_larg": 0.35, "placa_comp": 0.60, "canal_larg": 0.33, "esp": 0.0030},
-    "MA30-S WideGap": {"area": 1.38, "Pmax": 25, "Tmax": 180, "dh": 0.012, "conn": "12\"", "cat": "WideGap", "placa_larg": 0.70, "placa_comp": 1.00, "canal_larg": 0.65, "esp": 0.0050},
-    "WideGap 350": {"area": 1.80, "Pmax": 10, "Tmax": 180, "dh": 0.015, "conn": "14\"", "cat": "WideGap", "placa_larg": 0.80, "placa_comp": 1.10, "canal_larg": 0.75, "esp": 0.0060},
-    "M6-M": {"area": 0.15, "Pmax": 25, "Tmax": 180, "dh": 0.005, "conn": "2\"", "cat": "M-Line", "placa_larg": 0.15, "placa_comp": 0.40, "canal_larg": 0.14, "esp": 0.0020},
-    "M10-M": {"area": 0.24, "Pmax": 40, "Tmax": 180, "dh": 0.006, "conn": "4\"", "cat": "M-Line", "placa_larg": 0.25, "placa_comp": 0.50, "canal_larg": 0.24, "esp": 0.0025},
-    "M15-M": {"area": 0.36, "Pmax": 25, "Tmax": 180, "dh": 0.008, "conn": "6\"", "cat": "M-Line", "placa_larg": 0.35, "placa_comp": 0.60, "canal_larg": 0.33, "esp": 0.0030},
-    "T20-M": {"area": 0.85, "Pmax": 30, "Tmax": 180, "dh": 0.009, "conn": "8\"", "cat": "M-Line", "placa_larg": 0.45, "placa_comp": 0.75, "canal_larg": 0.43, "esp": 0.0030},
-    "M10-BW": {"area": 0.24, "Pmax": 55, "Tmax": 250, "dh": 0.005, "conn": "4\"", "cat": "Semi-Soldado", "placa_larg": 0.25, "placa_comp": 0.50, "canal_larg": 0.24, "esp": 0.0025},
-    "MK15-BW": {"area": 0.42, "Pmax": 41, "Tmax": 200, "dh": 0.006, "conn": "6\"", "cat": "Semi-Soldado", "placa_larg": 0.35, "placa_comp": 0.60, "canal_larg": 0.33, "esp": 0.0030},
-    "TK20-BW": {"area": 0.68, "Pmax": 63, "Tmax": 200, "dh": 0.006, "conn": "8\"", "cat": "Semi-Soldado", "placa_larg": 0.45, "placa_comp": 0.75, "canal_larg": 0.43, "esp": 0.0030},
-    "T20-W": {"area": 0.85, "Pmax": 30, "Tmax": 180, "dh": 0.009, "conn": "8\"", "cat": "Semi-Soldado", "placa_larg": 0.45, "placa_comp": 0.75, "canal_larg": 0.43, "esp": 0.0030},
-    "MA30-W": {"area": 1.40, "Pmax": 40, "Tmax": 180, "dh": 0.010, "conn": "12\"", "cat": "Semi-Soldado", "placa_larg": 0.70, "placa_comp": 1.00, "canal_larg": 0.65, "esp": 0.0040},
+    "M3": {"area": 0.03, "Pmax": 16, "Tmax": 180, "dh": 0.003, "conn": 'DN32 (1.25")', "cat": "Gaxetado", "placa_larg": 0.08, "placa_comp": 0.25, "canal_larg": 0.07, "esp": 0.0015},
+    "M6-B": {"area": 0.15, "Pmax": 10, "Tmax": 180, "dh": 0.005, "conn": 'DN50 (2")', "cat": "Gaxetado", "placa_larg": 0.15, "placa_comp": 0.40, "canal_larg": 0.14, "esp": 0.0020},
+    "TS6M": {"area": 0.26, "Pmax": 25, "Tmax": 180, "dh": 0.006, "conn": 'DN65 (2.5")', "cat": "Gaxetado", "placa_larg": 0.18, "placa_comp": 0.52, "canal_larg": 0.17, "esp": 0.0025},
+    "M10-B": {"area": 0.24, "Pmax": 10, "Tmax": 180, "dh": 0.006, "conn": 'DN100 (4")', "cat": "Gaxetado", "placa_larg": 0.25, "placa_comp": 0.50, "canal_larg": 0.24, "esp": 0.0025},
+    "TS20M": {"area": 0.95, "Pmax": 25, "Tmax": 180, "dh": 0.009, "conn": 'DN200 (8")', "cat": "Gaxetado", "placa_larg": 0.45, "placa_comp": 0.75, "canal_larg": 0.43, "esp": 0.0030},
+    "T20-B": {"area": 0.85, "Pmax": 10, "Tmax": 180, "dh": 0.009, "conn": 'DN200 (8")', "cat": "Gaxetado", "placa_larg": 0.45, "placa_comp": 0.75, "canal_larg": 0.43, "esp": 0.0030},
+    "M15-B": {"area": 0.36, "Pmax": 10, "Tmax": 180, "dh": 0.008, "conn": 'DN150 (6")', "cat": "Gaxetado", "placa_larg": 0.35, "placa_comp": 0.60, "canal_larg": 0.33, "esp": 0.0030},
+    "MA30-S WideGap": {"area": 1.38, "Pmax": 25, "Tmax": 180, "dh": 0.012, "conn": 'DN300 (12")', "cat": "WideGap", "placa_larg": 0.70, "placa_comp": 1.00, "canal_larg": 0.65, "esp": 0.0050},
+    "WideGap 350": {"area": 1.80, "Pmax": 10, "Tmax": 180, "dh": 0.015, "conn": 'DN350 (14")', "cat": "WideGap", "placa_larg": 0.80, "placa_comp": 1.10, "canal_larg": 0.75, "esp": 0.0060},
+    "M6-M": {"area": 0.15, "Pmax": 25, "Tmax": 180, "dh": 0.005, "conn": 'DN50 (2")', "cat": "M-Line", "placa_larg": 0.15, "placa_comp": 0.40, "canal_larg": 0.14, "esp": 0.0020},
+    "M10-M": {"area": 0.24, "Pmax": 40, "Tmax": 180, "dh": 0.006, "conn": 'DN100 (4")', "cat": "M-Line", "placa_larg": 0.25, "placa_comp": 0.50, "canal_larg": 0.24, "esp": 0.0025},
+    "M15-M": {"area": 0.36, "Pmax": 25, "Tmax": 180, "dh": 0.008, "conn": 'DN150 (6")', "cat": "M-Line", "placa_larg": 0.35, "placa_comp": 0.60, "canal_larg": 0.33, "esp": 0.0030},
+    "T20-M": {"area": 0.85, "Pmax": 30, "Tmax": 180, "dh": 0.009, "conn": 'DN200 (8")', "cat": "M-Line", "placa_larg": 0.45, "placa_comp": 0.75, "canal_larg": 0.43, "esp": 0.0030},
+    "M10-BW": {"area": 0.24, "Pmax": 55, "Tmax": 250, "dh": 0.005, "conn": 'DN100 (4")', "cat": "Semi-Soldado", "placa_larg": 0.25, "placa_comp": 0.50, "canal_larg": 0.24, "esp": 0.0025},
+    "MK15-BW": {"area": 0.42, "Pmax": 41, "Tmax": 200, "dh": 0.006, "conn": 'DN150 (6")', "cat": "Semi-Soldado", "placa_larg": 0.35, "placa_comp": 0.60, "canal_larg": 0.33, "esp": 0.0030},
+    "TK20-BW": {"area": 0.68, "Pmax": 63, "Tmax": 200, "dh": 0.006, "conn": 'DN150/200 (6"/8")', "cat": "Semi-Soldado", "placa_larg": 0.45, "placa_comp": 0.75, "canal_larg": 0.43, "esp": 0.0030},
+    "T20-W": {"area": 0.85, "Pmax": 30, "Tmax": 180, "dh": 0.009, "conn": 'DN200 (8")', "cat": "Semi-Soldado", "placa_larg": 0.45, "placa_comp": 0.75, "canal_larg": 0.43, "esp": 0.0030},
+    "MA30-W": {"area": 1.40, "Pmax": 40, "Tmax": 180, "dh": 0.010, "conn": 'DN300 (12")', "cat": "Semi-Soldado", "placa_larg": 0.70, "placa_comp": 1.00, "canal_larg": 0.65, "esp": 0.0040},
 }
 
 BANCO_FLUIDOS = {
@@ -85,7 +81,6 @@ BANCO_SERVICOS = {
 # ============================================================================
 
 def get_calor_latente(temp):
-    """Calor latente de vaporização da água (kJ/kg) por temperatura."""
     if temp >= 150: return 2114.0
     if temp >= 130: return 2174.0
     if temp >= 110: return 2230.0
@@ -112,13 +107,11 @@ def calc_reynolds_real(vazao_kgh, visc_pas, dens_kgm3, dh_m, canal_larg_m, n_pla
     return max(0.0, re)
 
 def calc_prandtl(cp_jkgk, visc_pas, cond_wm2k):
-    """Número de Prandtl."""
     if cond_wm2k <= 0 or visc_pas <= 0:
         return 0.0
     return (visc_pas * cp_jkgk) / cond_wm2k
 
 def calc_nusselt_placa(re, pr, angulo):
-    """Correlação de Nusselt para placas corrugadas."""
     if re <= 0 or pr <= 0:
         return 5.0
     
@@ -139,13 +132,11 @@ def calc_nusselt_placa(re, pr, angulo):
     return max(3.0, nu)
 
 def calc_h_coef(nu, cond_wm2k, dh_m):
-    """Coeficiente convectivo de transferência de calor (W/m²K)."""
     if dh_m <= 0:
         return 0.0
     return (nu * cond_wm2k) / dh_m
 
 def calc_u_global(h_p, h_s, esp_placa=0.0005, k_placa=17.0, r_fp=0.0001, r_fs=0.0001):
-    """Coeficiente global U considerando todas as resistências térmicas."""
     if h_p <= 0 or h_s <= 0:
         return 0.0
     r_total = (1.0 / h_p) + r_fp + (esp_placa / k_placa) + r_fs + (1.0 / h_s)
@@ -154,7 +145,6 @@ def calc_u_global(h_p, h_s, esp_placa=0.0005, k_placa=17.0, r_fp=0.0001, r_fs=0.
     return 1.0 / r_total
 
 def calc_lmtd(t1_ent, t1_sai, t2_ent, t2_sai, fluxo="contra"):
-    """LMTD para contra-corrente ou co-corrente."""
     if fluxo == "co":
         dt1 = abs(t1_ent - t2_ent)
         dt2 = abs(t1_sai - t2_sai)
@@ -169,24 +159,13 @@ def calc_lmtd(t1_ent, t1_sai, t2_ent, t2_sai, fluxo="contra"):
     return (dt1 - dt2) / math.log(dt1 / dt2)
 
 def calc_fator_f_corrigido(P, R, n_passes):
-    """
-    Fator de correção F para LMTD em arranjos multi-passe.
-    Versão robusta - evita erros numéricos.
-    
-    Para PHE a placas:
-    - 1/1 (contra-corrente puro): F = 1.0
-    - 2/2: F tipicamente 0.92-0.98 para PHE bem projetados
-    """
+    """Fator de correção F para LMTD. Versão robusta."""
     if n_passes == 1:
         return 1.0
     
-    # Limitar P e R para evitar instabilidades
     P = max(0.001, min(0.999, P))
     R = max(0.001, min(10.0, R))
     
-    # Para PHE 2/2, usar aproximação simplificada robusta
-    # Baseado em Shah & Sekulic (2003) - Heat Exchangers Design Handbook
-    # Para arranjos 2/2 em PHE, F é geralmente > 0.9 quando bem projetado
     if R < 0.2:
         f_est = 0.98
     elif R < 0.5:
@@ -198,27 +177,23 @@ def calc_fator_f_corrigido(P, R, n_passes):
     else:
         f_est = 0.88
     
-    # Penalidade se P é muito alto (aproximação térmica excessiva)
     if P > 0.8:
         f_est *= 0.98
     
     return max(0.75, min(1.0, f_est))
 
 def calc_area(Q_w, U, lmtd, F=1.0):
-    """Área de transferência de calor (m²)."""
     if U <= 0 or lmtd <= 0 or F <= 0:
         return 0.0
     return Q_w / (U * lmtd * F)
 
 def calc_vazao_servico(Q_w, cp_jkgk, dt):
-    """Vazão mássica do serviço (kg/h)."""
     if cp_jkgk <= 0 or dt <= 0:
         return 0.0
     m_dot_kgs = Q_w / (cp_jkgk * dt)
     return m_dot_kgs * 3600.0
 
 def calc_num_placas(area_total, area_placa):
-    """Número de placas necessárias."""
     if area_placa <= 0:
         return 0
     n = math.ceil(area_total / area_placa)
@@ -229,7 +204,6 @@ def calc_num_placas(area_total, area_placa):
     return n
 
 def recomendar_gaxeta(fluido_p, fluido_s, t_max):
-    """Recomendação de material de vedação."""
     tipos = [
         BANCO_FLUIDOS.get(fluido_p, {}).get("tipo"),
         BANCO_SERVICOS.get(fluido_s, {}).get("tipo"),
@@ -247,7 +221,10 @@ def recomendar_gaxeta(fluido_p, fluido_s, t_max):
     return "EPDM", "Melhor custo-benefício para fluidos aquosos."
 
 def calc_press_drop_real(re, n_placas, angulo, vazao_kgh, dens_kgm3, canal_larg_m, dh_m, visc_pas):
-    """Cálculo realista de queda de pressão."""
+    """
+    Cálculo realista de queda de pressão em PHE.
+    Retorna valor em kPa.
+    """
     if re <= 0 or n_placas < 2:
         return 0.0
     
@@ -262,6 +239,7 @@ def calc_press_drop_real(re, n_placas, angulo, vazao_kgh, dens_kgm3, canal_larg_
     vazao_por_canal = vazao_kgs / canais_por_lado
     u = vazao_por_canal / (dens_kgm3 * area_fluxo)
     
+    # Fator de fricção
     if "H" in angulo:
         f = 0.5 / (re ** 0.2) if re >= 2000 else 16.0 / re
     elif "L" in angulo:
@@ -269,25 +247,42 @@ def calc_press_drop_real(re, n_placas, angulo, vazao_kgh, dens_kgm3, canal_larg_
     else:
         f = 0.4 / (re ** 0.2) if re >= 2000 else 16.0 / re
     
-    comp_hidraulico = 2.0 * 0.5
-    dp_canal = 4.0 * f * (comp_hidraulico / dh_m) * (dens_kgm3 * u ** 2 / 2.0)
+    # Comprimento de uma placa (estimado)
+    comp_placa = max(0.3, canal_larg_m * 2.5)
+    comp_total = comp_placa  # uma passagem
     
-    d_porta = 0.05
+    # Perda de carga por fricção no canal (Pa = N/m²)
+    # dP = 4f × (L/dh) × (rho × u² / 2)
+    dp_canal_pa = 4.0 * f * (comp_total / dh_m) * (dens_kgm3 * u ** 2 / 2.0)
+    
+    # Perda localizada nas portas (entradas/saídas)
+    d_porta = 0.05  # 2" ~ 50mm
     area_porta = math.pi * (d_porta ** 2) / 4.0
     u_porta = vazao_kgs / (dens_kgm3 * area_porta)
-    k_local = 3.0
-    dp_portas = k_local * (dens_kgm3 * u_porta ** 2 / 2.0)
+    k_local = 2.5  # coeficiente de perda localizada
+    dp_portas_pa = k_local * (dens_kgm3 * u_porta ** 2 / 2.0)
     
-    return (dp_canal + dp_portas) / 1000.0
+    # Total em Pa, converter para kPa
+    dp_total_pa = dp_canal_pa + dp_portas_pa
+    dp_total_kpa = dp_total_pa / 1000.0
+    
+    return max(0.0, dp_total_kpa)
 
-def get_pass_arrangement(vazao_kgh, lmtd, temp_max):
-    """Determina arranjo de passes."""
+def get_pass_arrangement(vazao_kgh, lmtd, temp_max, modo_manual="Automatico"):
+    """
+    Determina arranjo de passes. Se manual, retorna o selecionado.
+    """
+    if modo_manual == "Single Pass (1/1)":
+        return "1/1", "Single Pass", "Selecionado manualmente: todas as conexões no cabeçote fixo."
+    if modo_manual == "Two Pass (2/2)":
+        return "2/2", "Two Pass", "Selecionado manualmente: conexões em lados opostos para reversão de fluxo."
+    
+    # Automático
     if lmtd < 3.0 or vazao_kgh > 20000:
         return "2/2", "Two Pass", "Necessário para melhor aproximação térmica ou gerenciar alta vazão."
     return "1/1", "Single Pass", "Arranjo padrão para máxima eficiência em contra-corrente."
 
 def determinar_conexoes(arranjo_passe):
-    """Define onde os fluidos entram e saem."""
     if arranjo_passe == "1/1":
         return {
             "produto_entrada": "Cabeçote Fixo (Frame Plate)",
@@ -307,18 +302,101 @@ def determinar_conexoes(arranjo_passe):
             "port_arrangement": "Pass 1: Fixo -> Móvel | Pass 2: Móvel -> Fixo",
         }
 
+def gerar_correcoes(alertas, dp_p, dp_s, re_p, re_s, fator_f, angulo_atual, arranjo_atual, n_placas, lmtd):
+    """
+    Gera sugestões de correção automática baseadas nos alertas detectados.
+    Retorna lista de dicionários com ação e justificativa.
+    """
+    correcoes = []
+    
+    # Correção para ΔP elevada
+    if dp_p > 150 or dp_s > 150:
+        sugestao = []
+        if "H" in angulo_atual:
+            sugestao.append("Mudar ângulo da placa de H (45°) para L (60°) ou Mista (52.5°)")
+        if arranjo_atual == "2/2":
+            sugestao.append("Considerar Single Pass (1/1) para reduzir comprimento do percurso")
+        if n_placas > 50:
+            sugestao.append("Verificar se o número de placas pode ser reduzido")
+        if not sugestao:
+            sugestao.append("Reduzir vazão ou aumentar área de troca")
+        
+        correcoes.append({
+            "problema": "Queda de pressão excessiva",
+            "valor": f"Produto: {dp_p:.1f} kPa | Serviço: {dp_s:.1f} kPa",
+            "limite": "150 kPa",
+            "acoes": sugestao,
+            "prioridade": "Alta"
+        })
+    
+    # Correção para Reynolds baixo
+    if re_p < 2000:
+        correcoes.append({
+            "problema": "Reynolds do produto baixo (regime laminar)",
+            "valor": f"{re_p:.0f}",
+            "limite": "> 2000",
+            "acoes": [
+                "Mudar ângulo da placa para H (45°) para aumentar turbulência",
+                "Reduzir número de placas para aumentar velocidade por canal",
+                "Verificar se a vazão está dentro da faixa do modelo"
+            ],
+            "prioridade": "Média"
+        })
+    
+    if re_s < 2000 and not (BANCO_SERVICOS.get(st.session_state.get("serv_sel", ""), {}).get("tipo") == "vapor"):
+        correcoes.append({
+            "problema": "Reynolds do serviço baixo (regime laminar)",
+            "valor": f"{re_s:.0f}",
+            "limite": "> 2000",
+            "acoes": [
+                "Mudar ângulo da placa para H (45°) para aumentar turbulência",
+                "Reduzir número de placas para aumentar velocidade por canal"
+            ],
+            "prioridade": "Média"
+        })
+    
+    # Correção para Fator F baixo
+    if fator_f < 0.75:
+        correcoes.append({
+            "problema": "Fator F de correção baixo",
+            "valor": f"{fator_f:.3f}",
+            "limite": "> 0.75",
+            "acoes": [
+                "Aumentar diferença de temperatura (aumentar ΔT de um dos fluidos)",
+                f"Ajustar arranjo para Two Pass (2/2) — atual: {arranjo_atual}",
+                "Verificar se a aproximação térmica não é excessiva"
+            ],
+            "prioridade": "Média"
+        })
+    
+    # Correção para LMTD muito baixo
+    if lmtd < 2.0:
+        correcoes.append({
+            "problema": "LMTD muito baixo",
+            "valor": f"{lmtd:.2f} °C",
+            "limite": "> 2.0 °C",
+            "acoes": [
+                "Aumentar diferença de temperatura entre fluidos",
+                "Considerar série de trocadores para aproximação térmica",
+                "Verificar se as temperaturas de projeto estão corretas"
+            ],
+            "prioridade": "Alta"
+        })
+    
+    return correcoes
+
 # ============================================================================
 # GERAÇÃO DE PDF TÉCNICO
 # ============================================================================
 
 def gerar_pdf(
-    tag, projeto, modelo, angulo, arranjo, conexoes, fluxo_config,
+    tag, projeto, modelo, angulo, arranjo, conexoes, fluxo_config, pass_manual,
     prod, vazao_p, t_in_p, t_out_p,
     serv, vazao_s_calc, t_in_s, t_out_s,
     carga_kw, carga_w, area_req, n_placas, lmtd, fator_f,
     re_p, re_s, pr_p, pr_s, h_p, h_s, U_calc,
     dp_p, dp_s, gaxeta, gaxeta_desc,
-    data_str,
+    correcoes, data_str,
 ):
     buf = io.BytesIO()
     doc = SimpleDocTemplate(buf, pagesize=A4, rightMargin=1.5*cm, leftMargin=1.5*cm,
@@ -351,7 +429,7 @@ def gerar_pdf(
         ["Modelo Selecionado", modelo],
         ["Ângulo da Placa", angulo],
         ["Configuração de Fluxo", fluxo_config],
-        ["Arranjo de Passes", arranjo],
+        ["Arranjo de Passes", f"{arranjo} ({pass_manual})"],
     ], colWidths=[8*cm, 8*cm])
     t1.setStyle(TableStyle([
         ("BACKGROUND", (0, 0), (0, -1), colors.HexColor("#f0f4f8")),
@@ -438,6 +516,16 @@ def gerar_pdf(
     story.append(t4)
     story.append(Spacer(1, 10))
 
+    # Correções no PDF
+    if correcoes:
+        story.append(Paragraph("<b>5. Diagnóstico e Correções Sugeridas</b>", style_h2))
+        for corr in correcoes:
+            story.append(Paragraph(f"<b>{corr['problema']}</b> — Prioridade: {corr['prioridade']}", style_normal))
+            story.append(Paragraph(f"Valor: {corr['valor']} | Limite: {corr['limite']}", style_normal))
+            for acao in corr['acoes']:
+                story.append(Paragraph(f"• {acao}", style_normal))
+            story.append(Spacer(1, 5))
+
     story.append(
         Paragraph(
             "<i>Este relatório foi gerado automaticamente pelo Dimensionador Técnico AlfaVed. "
@@ -455,6 +543,8 @@ def gerar_pdf(
 # ============================================================================
 
 def main():
+    st.set_page_config(page_title="AlfaVed Engenharia - Dimensionador", page_icon="▲", layout="wide")
+    
     st.markdown(
         """
         <style>
@@ -479,6 +569,20 @@ def main():
             margin-top: 10px;
             border: 1px solid #dee2e6;
         }
+        .correcao-card {
+            background: #fff8e1;
+            border-left: 5px solid #ff9800;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 8px 0;
+        }
+        .correcao-card-alta {
+            background: #ffebee;
+            border-left: 5px solid #f44336;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 8px 0;
+        }
         </style>
         """,
         unsafe_allow_html=True,
@@ -487,7 +591,7 @@ def main():
     st.markdown(
         '<div class="main-header">'
         '<h1>AlfaVed Engenharia Térmica</h1>'
-        '<h3>Dimensionador de Trocadores Alfa Laval v2.1</h3>'
+        '<h3>Dimensionador de Trocadores Alfa Laval v2.2</h3>'
         f'<p>Data: {datetime.now().strftime("%d/%m/%Y")}</p>'
         "</div>",
         unsafe_allow_html=True,
@@ -520,16 +624,23 @@ def main():
             help="Contra-corrente: máxima eficiência. Co-corrente: usado em casos específicos de controle térmico."
         )
 
+        # NOVO: Seletor manual de arranjo de passes
+        pass_manual = st.selectbox(
+            "Arranjo de Passes",
+            ["Automatico (Recomendado)", "Single Pass (1/1)", "Two Pass (2/2)"],
+            help="Single Pass: todas as conexões no cabeçote fixo. Two Pass: conexões em lados opostos."
+        )
+
         st.divider()
         st.subheader("Lado do Produto")
-        prod = st.selectbox("Fluido Produto", list(BANCO_FLUIDOS.keys()))
+        prod = st.selectbox("Fluido Produto", list(BANCO_FLUIDOS.keys()), key="prod_sel")
         vazao_p = st.number_input("Vazão Produto (kg/h)", 100.0, 500000.0, 5000.0, step=100.0)
         t_in_p = st.number_input("Temp. Entrada Produto (°C)", 0.0, 250.0, 85.0, step=0.5)
         t_out_p = st.number_input("Temp. Saída Produto (°C)", 0.0, 250.0, 10.0, step=0.5)
 
         st.divider()
         st.subheader("Lado do Serviço")
-        serv = st.selectbox("Fluido Serviço", list(BANCO_SERVICOS.keys()))
+        serv = st.selectbox("Fluido Serviço", list(BANCO_SERVICOS.keys()), key="serv_sel")
         t_in_s = st.number_input("Temp. Entrada Serviço (°C)", -30.0, 300.0, 2.0, step=0.5)
         t_out_s = st.number_input("Temp. Saída Serviço (°C)", -30.0, 300.0, 7.0, step=0.5)
 
@@ -558,22 +669,25 @@ def main():
     fluxo_tipo = "co" if "Co" in fluxo_config else "contra"
     lmtd = calc_lmtd(t_in_p, t_out_p, t_in_s, t_out_s, fluxo=fluxo_tipo)
 
-    arranjo, nome_arranjo, desc_arranjo = get_pass_arrangement(vazao_p, lmtd, max(t_in_p, t_out_p))
+    # Arranjo de passes com opção manual
+    arranjo, nome_arranjo, desc_arranjo = get_pass_arrangement(
+        vazao_p, lmtd, max(t_in_p, t_out_p), modo_manual=pass_manual
+    )
     n_passes_int = 2 if arranjo == "2/2" else 1
     conexoes = determinar_conexoes(arranjo)
 
     # Fator F
     T1 = max(t_in_p, t_out_p)
     T2 = min(t_in_p, t_out_p)
-    t1 = min(t_in_s, t_out_s)
-    t2 = max(t_in_s, t_out_s)
+    t1_cold = min(t_in_s, t_out_s)
+    t2_cold = max(t_in_s, t_out_s)
     dt_hot = abs(T1 - T2)
-    dt_cold = abs(t2 - t1)
-    P_f = dt_cold / (T1 - t1) if (T1 - t1) > 0 else 0.5
+    dt_cold = abs(t2_cold - t1_cold)
+    P_f = dt_cold / (T1 - t1_cold) if (T1 - t1_cold) > 0 else 0.5
     R_f = dt_hot / dt_cold if dt_cold > 0 else 1.0
     fator_f = calc_fator_f_corrigido(P_f, R_f, n_passes_int)
 
-    # Iteração para número de placas e coeficientes
+    # Iteração placas
     U_teorico = 4000.0
     area_estimada = calc_area(carga_w, U_teorico, lmtd, fator_f)
     n_placas_est = calc_num_placas(area_estimada, d_m["area"])
@@ -595,7 +709,7 @@ def main():
     area_req = calc_area(carga_w, U_calc, lmtd, fator_f)
     n_placas = calc_num_placas(area_req, d_m["area"])
 
-    # Recalcular com número final de placas
+    # Recalcular com número final
     re_p = calc_reynolds_real(vazao_p, d_p["visc"], d_p["dens"], d_m["dh"], d_m["canal_larg"], n_placas)
     re_s = calc_reynolds_real(vazao_s_calc, d_s["visc"], d_s["dens"], d_m["dh"], d_m["canal_larg"], n_placas)
     nu_p = calc_nusselt_placa(re_p, pr_p, angulo_sel)
@@ -606,11 +720,17 @@ def main():
     area_req = calc_area(carga_w, U_calc, lmtd, fator_f)
     n_placas = calc_num_placas(area_req, d_m["area"])
 
+    # Queda de pressão em kPa (CORRIGIDO)
     dp_p = calc_press_drop_real(re_p, n_placas, angulo_sel, vazao_p, d_p["dens"], d_m["canal_larg"], d_m["dh"], d_p["visc"])
     dp_s = calc_press_drop_real(re_s, n_placas, angulo_sel, vazao_s_calc, d_s["dens"], d_m["canal_larg"], d_m["dh"], d_s["visc"])
 
     t_max = max(t_in_p, t_out_p, t_in_s, t_out_s)
     gaxeta, gaxeta_desc = recomendar_gaxeta(prod, serv, t_max)
+
+    # Gerar correções automáticas
+    correcoes = gerar_correcoes(
+        [], dp_p, dp_s, re_p, re_s, fator_f, angulo_sel, arranjo, n_placas, lmtd
+    )
 
     # ============================================================================
     # PAINEL DE RESULTADOS
@@ -645,7 +765,10 @@ def main():
         st.caption(f"Regime Produto: **{regime_p}** | Regime Serviço: **{regime_s}**")
 
         st.markdown("#### Arranjo de Passes")
-        st.info(f"**{nome_arranjo}** ({arranjo}) — {desc_arranjo}")
+        if pass_manual == "Automatico (Recomendado)":
+            st.info(f"**{nome_arranjo}** ({arranjo}) — {desc_arranjo}")
+        else:
+            st.success(f"**{nome_arranjo}** ({arranjo}) — Seleção manual do usuário")
 
         st.markdown("#### Configuração de Conexões")
         st.markdown(
@@ -677,36 +800,63 @@ def main():
         col_dp1.metric("ΔP Produto", f"{dp_p:.2f} kPa")
         col_dp2.metric("ΔP Serviço", f"{dp_s:.2f} kPa")
 
+        # ============================================================================
+        # VERIFICAÇÕES E CORREÇÕES AUTOMÁTICAS
+        # ============================================================================
+
+        st.markdown("---")
         st.markdown("#### Verificações de Projeto")
-        checks = []
+
+        alertas = []
         if t_max > d_m["Tmax"]:
-            checks.append(f"⚠️ Temperatura máxima ({t_max:.1f}°C) excede limite do modelo ({d_m['Tmax']}°C)")
+            alertas.append(f"⚠️ Temperatura máxima ({t_max:.1f}°C) excede limite do modelo ({d_m['Tmax']}°C)")
         if dp_p > 150:
-            checks.append(f"⚠️ ΔP do produto ({dp_p:.1f} kPa) está elevada (>150 kPa)")
+            alertas.append(f"⚠️ ΔP do produto ({dp_p:.1f} kPa) está elevada (>150 kPa)")
         if dp_s > 150:
-            checks.append(f"⚠️ ΔP do serviço ({dp_s:.1f} kPa) está elevada (>150 kPa)")
+            alertas.append(f"⚠️ ΔP do serviço ({dp_s:.1f} kPa) está elevada (>150 kPa)")
         if fator_f < 0.75:
-            checks.append(f"⚠️ Fator F ({fator_f:.3f}) baixo — considere aumentar passes ou ajustar temperaturas")
+            alertas.append(f"⚠️ Fator F ({fator_f:.3f}) baixo — considere aumentar passes ou ajustar temperaturas")
         if re_p < 2000:
-            checks.append(f"ℹ️ Reynolds produto ({re_p:.0f}) em regime laminar — eficiência reduzida")
-        if re_s < 2000:
-            checks.append(f"ℹ️ Reynolds serviço ({re_s:.0f}) em regime laminar — eficiência reduzida")
-        
-        if checks:
-            for c in checks:
-                st.warning(c)
+            alertas.append(f"ℹ️ Reynolds produto ({re_p:.0f}) em regime laminar — eficiência reduzida")
+        if re_s < 2000 and not is_vapor:
+            alertas.append(f"ℹ️ Reynolds serviço ({re_s:.0f}) em regime laminar — eficiência reduzida")
+        if lmtd < 2.0:
+            alertas.append(f"⚠️ LMTD muito baixo ({lmtd:.2f}°C) — verificar temperaturas de projeto")
+
+        if alertas:
+            for a in alertas:
+                st.warning(a)
         else:
             st.success("✅ Todos os parâmetros dentro dos limites recomendados.")
 
+        # NOVO: Seção de Correções Automáticas
+        if correcoes:
+            st.markdown("---")
+            st.markdown("#### 🛠️ Diagnóstico e Correções Sugeridas")
+
+            for corr in correcoes:
+                card_class = "correcao-card-alta" if corr["prioridade"] == "Alta" else "correcao-card"
+                st.markdown(
+                    f'<div class="{card_class}">'
+                    f'<b>{corr["problema"]}</b> <span style="color:#666;font-size:12px;">(Prioridade: {corr["prioridade"]})</span><br>'
+                    f'<span style="font-size:13px;">Valor atual: <b>{corr["valor"]}</b> | Limite: {corr["limite"]}</span><br><br>'
+                    f'<b>Ações recomendadas:</b>',
+                    unsafe_allow_html=True
+                )
+                for acao in corr["acoes"]:
+                    st.markdown(f"• {acao}")
+                st.markdown('</div>', unsafe_allow_html=True)
+
+        # PDF
         data_str = datetime.now().strftime("%d/%m/%Y")
         pdf_buffer = gerar_pdf(
-            tag, projeto, modelo, angulo_sel, nome_arranjo, conexoes, fluxo_config,
+            tag, projeto, modelo, angulo_sel, nome_arranjo, conexoes, fluxo_config, pass_manual,
             prod, vazao_p, t_in_p, t_out_p,
             serv, vazao_s_calc, t_in_s, t_out_s,
             carga_kw, carga_w, area_req, n_placas, lmtd, fator_f,
             re_p, re_s, pr_p, pr_s, h_p, h_s, U_calc,
             dp_p, dp_s, gaxeta, gaxeta_desc,
-            data_str,
+            correcoes, data_str,
         )
 
         st.download_button(
