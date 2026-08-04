@@ -1,5 +1,5 @@
 """
-AlfaVed Engenharia Térmica - Dimensionador PHE v2.2
+AlfaVed Engenharia Térmica - Dimensionador PHE v2.3
 Arquivo: app.py
 """
 
@@ -74,6 +74,25 @@ BANCO_SERVICOS = {
     "Ar Comprimido": {"cp": 1010, "visc": 0.000018, "dens": 1.20, "cond": 0.026, "tipo": "gas"},
     "Glicol 30%": {"cp": 3700, "visc": 0.00350, "dens": 1040, "cond": 0.50, "tipo": "base"},
     "Glicol 50%": {"cp": 3500, "visc": 0.00600, "dens": 1070, "cond": 0.46, "tipo": "base"},
+}
+
+# ============================================================================
+# CONTATOS TÉCNICOS ALFAVED
+# ============================================================================
+
+CONTATOS_ALFAVED = {
+    "responsavel_projeto": {
+        "nome": "Vitor Soares",
+        "cargo": "Responsável de Projeto",
+        "email": "engenharia@alfaved.com.br",
+        "telefone": "(18) 9.9669-7330",
+    },
+    "diretor_engenharia": {
+        "nome": "Jhonatan Dias Dejato",
+        "cargo": "Diretor de Engenharia",
+        "email": "jhonatan@alfaved.com.br",
+        "telefone": "(18) 9.9628-8714",
+    },
 }
 
 # ============================================================================
@@ -252,7 +271,6 @@ def calc_press_drop_real(re, n_placas, angulo, vazao_kgh, dens_kgm3, canal_larg_
     comp_total = comp_placa  # uma passagem
     
     # Perda de carga por fricção no canal (Pa = N/m²)
-    # dP = 4f × (L/dh) × (rho × u² / 2)
     dp_canal_pa = 4.0 * f * (comp_total / dh_m) * (dens_kgm3 * u ** 2 / 2.0)
     
     # Perda localizada nas portas (entradas/saídas)
@@ -396,7 +414,7 @@ def gerar_pdf(
     carga_kw, carga_w, area_req, n_placas, lmtd, fator_f,
     re_p, re_s, pr_p, pr_s, h_p, h_s, U_calc,
     dp_p, dp_s, gaxeta, gaxeta_desc,
-    correcoes, data_str,
+    correcoes, data_str, contatos,
 ):
     buf = io.BytesIO()
     doc = SimpleDocTemplate(buf, pagesize=A4, rightMargin=1.5*cm, leftMargin=1.5*cm,
@@ -442,7 +460,28 @@ def gerar_pdf(
     story.append(t1)
     story.append(Spacer(1, 10))
 
-    story.append(Paragraph("<b>2. Configuração de Conexões</b>", style_h2))
+    story.append(Paragraph("<b>2. Contatos Técnicos</b>", style_h2))
+    resp = contatos["responsavel_projeto"]
+    diretor = contatos["diretor_engenharia"]
+    t_cont = Table([
+        ["Cargo", "Nome", "E-mail", "Telefone"],
+        [resp["cargo"], resp["nome"], resp["email"], resp["telefone"]],
+        [diretor["cargo"], diretor["nome"], diretor["email"], diretor["telefone"]],
+    ], colWidths=[4*cm, 4*cm, 4*cm, 4*cm])
+    t_cont.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#003049")),
+        ("TEXTCOLOR", (0, 0), (-1, 0), colors.whitesmoke),
+        ("BACKGROUND", (0, 1), (0, -1), colors.HexColor("#f0f4f8")),
+        ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+        ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
+        ("FONTSIZE", (0, 0), (-1, -1), 9),
+        ("TOPPADDING", (0, 0), (-1, -1), 4),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+    ]))
+    story.append(t_cont)
+    story.append(Spacer(1, 10))
+
+    story.append(Paragraph("<b>3. Configuração de Conexões</b>", style_h2))
     story.append(Paragraph(f"<b>Descrição:</b> {conexoes['descricao']}", style_normal))
     story.append(Paragraph(f"<b>Port Arrangement:</b> {conexoes['port_arrangement']}", style_normal))
     t2 = Table([
@@ -463,7 +502,7 @@ def gerar_pdf(
     story.append(t2)
     story.append(Spacer(1, 10))
 
-    story.append(Paragraph("<b>3. Dados Operacionais</b>", style_h2))
+    story.append(Paragraph("<b>4. Dados Operacionais</b>", style_h2))
     t3 = Table([
         ["Parâmetro", "Produto", "Serviço"],
         ["Fluido", prod, serv],
@@ -484,7 +523,7 @@ def gerar_pdf(
     story.append(t3)
     story.append(Spacer(1, 10))
 
-    story.append(Paragraph("<b>4. Resultados do Dimensionamento</b>", style_h2))
+    story.append(Paragraph("<b>5. Resultados do Dimensionamento</b>", style_h2))
     res_data = [
         ["Carga Térmica (kW)", f"{carga_kw:.2f}"],
         ["Carga Térmica (W)", f"{carga_w:,.0f}"],
@@ -518,7 +557,7 @@ def gerar_pdf(
 
     # Correções no PDF
     if correcoes:
-        story.append(Paragraph("<b>5. Diagnóstico e Correções Sugeridas</b>", style_h2))
+        story.append(Paragraph("<b>6. Diagnóstico e Correções Sugeridas</b>", style_h2))
         for corr in correcoes:
             story.append(Paragraph(f"<b>{corr['problema']}</b> — Prioridade: {corr['prioridade']}", style_normal))
             story.append(Paragraph(f"Valor: {corr['valor']} | Limite: {corr['limite']}", style_normal))
@@ -529,7 +568,8 @@ def gerar_pdf(
     story.append(
         Paragraph(
             "<i>Este relatório foi gerado automaticamente pelo Dimensionador Técnico AlfaVed. "
-            "Os valores são estimados e devem ser validados pelo departamento de engenharia.</i>",
+            "Os valores são estimados e devem ser validados pelo departamento de engenharia. "
+            f"Suporte técnico: {resp['email']} | {resp['telefone']}</i>",
             style_normal,
         )
     )
@@ -569,6 +609,13 @@ def main():
             margin-top: 10px;
             border: 1px solid #dee2e6;
         }
+        .contact-card-person {
+            background: #ffffff;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            padding: 12px 15px;
+            margin-bottom: 8px;
+        }
         .correcao-card {
             background: #fff8e1;
             border-left: 5px solid #ff9800;
@@ -591,7 +638,7 @@ def main():
     st.markdown(
         '<div class="main-header">'
         '<h1>AlfaVed Engenharia Térmica</h1>'
-        '<h3>Dimensionador de Trocadores Alfa Laval v2.2</h3>'
+        '<h3>Dimensionador de Trocadores Alfa Laval v2.3</h3>'
         f'<p>Data: {datetime.now().strftime("%d/%m/%Y")}</p>'
         "</div>",
         unsafe_allow_html=True,
@@ -624,7 +671,7 @@ def main():
             help="Contra-corrente: máxima eficiência. Co-corrente: usado em casos específicos de controle térmico."
         )
 
-        # NOVO: Seletor manual de arranjo de passes
+        # Seletor manual de arranjo de passes
         pass_manual = st.selectbox(
             "Arranjo de Passes",
             ["Automatico (Recomendado)", "Single Pass (1/1)", "Two Pass (2/2)"],
@@ -720,7 +767,7 @@ def main():
     area_req = calc_area(carga_w, U_calc, lmtd, fator_f)
     n_placas = calc_num_placas(area_req, d_m["area"])
 
-    # Queda de pressão em kPa (CORRIGIDO)
+    # Queda de pressão em kPa
     dp_p = calc_press_drop_real(re_p, n_placas, angulo_sel, vazao_p, d_p["dens"], d_m["canal_larg"], d_m["dh"], d_p["visc"])
     dp_s = calc_press_drop_real(re_s, n_placas, angulo_sel, vazao_s_calc, d_s["dens"], d_m["canal_larg"], d_m["dh"], d_s["visc"])
 
@@ -731,6 +778,10 @@ def main():
     correcoes = gerar_correcoes(
         [], dp_p, dp_s, re_p, re_s, fator_f, angulo_sel, arranjo, n_placas, lmtd
     )
+
+    # Contatos
+    resp = CONTATOS_ALFAVED["responsavel_projeto"]
+    diretor = CONTATOS_ALFAVED["diretor_engenharia"]
 
     # ============================================================================
     # PAINEL DE RESULTADOS
@@ -829,7 +880,7 @@ def main():
         else:
             st.success("✅ Todos os parâmetros dentro dos limites recomendados.")
 
-        # NOVO: Seção de Correções Automáticas
+        # Correções Automáticas
         if correcoes:
             st.markdown("---")
             st.markdown("#### 🛠️ Diagnóstico e Correções Sugeridas")
@@ -856,7 +907,7 @@ def main():
             carga_kw, carga_w, area_req, n_placas, lmtd, fator_f,
             re_p, re_s, pr_p, pr_s, h_p, h_s, U_calc,
             dp_p, dp_s, gaxeta, gaxeta_desc,
-            correcoes, data_str,
+            correcoes, data_str, CONTATOS_ALFAVED,
         )
 
         st.download_button(
@@ -867,12 +918,35 @@ def main():
             use_container_width=True,
         )
 
+        # Contatos técnicos na interface
         st.markdown("---")
+        st.markdown("#### Contatos Técnicos AlfaVed")
+
+        st.markdown(
+            f'<div class="contact-card-person">'
+            f'<b>{resp["cargo"]}</b><br>'
+            f'<span style="font-size:16px;">{resp["nome"]}</span><br>'
+            f'📧 <a href="mailto:{resp["email"]}">{resp["email"]}</a> | '
+            f'📞 {resp["telefone"]}'
+            f'</div>',
+            unsafe_allow_html=True,
+        )
+
+        st.markdown(
+            f'<div class="contact-card-person">'
+            f'<b>{diretor["cargo"]}</b><br>'
+            f'<span style="font-size:16px;">{diretor["nome"]}</span><br>'
+            f'📧 <a href="mailto:{diretor["email"]}">{diretor["email"]}</a> | '
+            f'📞 {diretor["telefone"]}'
+            f'</div>',
+            unsafe_allow_html=True,
+        )
+
         st.markdown(
             '<div class="contact-card">'
             "<b>AlfaVed Soluções Industriais</b><br>"
             "Engenharia de Vedação Industrial<br>"
-            "Suporte técnico: comercial@alfaved.com.br"
+            "Suporte técnico: engenharia@alfaved.com.br"
             "</div>",
             unsafe_allow_html=True,
         )
