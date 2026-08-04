@@ -1,12 +1,8 @@
 import io
-import json
 import math
-import google.genai as genai
 import streamlit as st
 st.set_page_config(page_title="AlfaVed Engenharia - Dimensionador", page_icon="▲", layout="wide")
 import pandas as pd
-import plotly.graph_objects as go
-import plotly.express as px
 from reportlab.lib.pagesizes import letter
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
@@ -204,62 +200,12 @@ def calculate_dimensionamento(produto, dados_fluido, modelo, dados_modelo, t_in_
         'material_modelo': dados_modelo.get('material', 'N/A'),
     }
 
-def generate_parecer_ia(modelo, tag, projeto, produto, servico, vazao_prod, resultados, tipo_modelo):
-    contexto = {
-        'dados': {
-            'Modelo': modelo, 'Tipo': tipo_modelo, 'Linha': resultados.get('linha_modelo', 'N/A'),
-            'Tag': tag, 'Projeto': projeto, 'Produto': produto, 'Servico': servico, 'Vazao': vazao_prod
-        },
-        'turbulencia': {
-            'Reynolds_Produto': round(resultados['reynolds_prod'], 0),
-            'Regime_Produto': resultados['regime_prod'],
-            'Reynolds_Servico': round(resultados['reynolds_serv'], 0),
-            'Regime_Servico': resultados['regime_serv']
-        },
-        'configuracao_recomendada': {'Tipo_Placa': resultados['tipo_placa']},
-        'calculado': {
-            'kw': round(resultados['carga_kw'], 2),
-            'placas': resultados['placas'],
-            'area': round(resultados['area_m2'], 2),
-            'area_unitaria_placa': resultados['area_por_placa'],
-            'U_adotado': round(resultados['U_adotado'], 0)
-        }
-    }
-    prompt = (
-        f"Atue como Engenheiro Quimico Senior Especialista em Trocadores de Calor da AlfaVed. "
-        f"Analise: {json.dumps(contexto)}. Escreva um Parecer Tecnico Descritivo (maximo 180 words) "
-        f"focando em: 1) Material das gaxetas adequado para {produto} e {servico}; "
-        f"2) Analise do regime de turbulencia (Reynolds) para eficiencia termica; "
-        f"3) Configuracao recomendada com placa {resultados['tipo_placa']}; "
-        f"4) Risco de incrustacao e avaliacao se o arranjo de {resultados['placas']} placas "
-        f"do modelo {modelo} atende com seguranca. "
-        f"Retorne APENAS o texto corrido do parecer, sem markdown e sem asteriscos."
-    )
-    try:
-        chave_segura = st.secrets['GEMINI_API_KEY']
-        client = genai.Client(api_key=chave_segura)
-        response = client.models.generate_content(
-            model='gemini-flash-latest', contents=prompt, config=dict(temperature=0.2))
-        return response.text.strip().replace('*', '')
-    except Exception:
-        return (
-            f"Parecer tecnico AlfaVed local. Processamento para {produto} em {modelo} "
-            f"({tipo_modelo}, linha {resultados.get('linha_modelo', 'N/A')}) com servico {servico} "
-            f"indica demanda termica de {resultados['carga_kw']:.2f} kW. "
-            f"Reynolds Produto: {resultados['reynolds_prod']:.0f} ({resultados['regime_prod']}). "
-            f"Reynolds Servico: {resultados['reynolds_serv']:.0f} ({resultados['regime_serv']}). "
-            f"Placa recomendada: {resultados['tipo_placa']} - {resultados['justificativa_placa']} "
-            f"Gaxetas EPDM para laticinios ou NBR para oleos. "
-            f"Arranjo de {resultados['placas']} placas aprovado. "
-            f"Material: {resultados.get('material_modelo', 'N/A')}. Conexao: {resultados.get('conexao', 'N/A')}."
-        )
-
-def build_pdf(modelo, tag, projeto, produto, servico, t_in_prod, t_out_prod, t_in_serv, t_out_serv, vazao_prod, vazao_serv, resultados, parecer_ia, tipo_modelo):
+def build_pdf(modelo, tag, projeto, produto, servico, t_in_prod, t_out_prod, t_in_serv, t_out_serv, vazao_prod, vazao_serv, resultados, tipo_modelo):
     pdf_buffer = io.BytesIO()
     doc = SimpleDocTemplate(pdf_buffer, pagesize=letter, rightMargin=54, leftMargin=54, topMargin=54, bottomMargin=54)
     story = [
         Paragraph('AlfaVed Solucoes Industriais', st_tit),
-        Paragraph('DATASHEET TECNICO - ENGENHARIA ASSISTIDA POR IA', st_sub),
+        Paragraph('DATASHEET TECNICO - DIMENSIONAMENTO DE TROCADOR DE CALOR', st_sub),
         Spacer(1, 10)
     ]
     story.append(Paragraph('1. Informacoes Gerais do Projeto', st_h2))
@@ -312,6 +258,12 @@ def build_pdf(modelo, tag, projeto, produto, servico, t_in_prod, t_out_prod, t_i
         [Paragraph('Area por Placa', st_tc), Paragraph(f'{resultados["area_por_placa"]} m2', st_tc)],
         [Paragraph('Quantidade de Placas', st_tc), Paragraph(f'{resultados["placas"]} placas', st_tc)],
     ]))
+    story.append(Paragraph('6. Responsaveis Tecnicos', st_h2))
+    story.append(Table([
+        [Paragraph('Nome', st_th), Paragraph('Cargo', st_th), Paragraph('E-mail', st_th), Paragraph('Telefone', st_th)],
+        [Paragraph('Vitor Soares', st_tc), Paragraph('Responsavel pelo Projeto', st_tc), Paragraph('engenharia@alfaved.com.br', st_tc), Paragraph('(18) 9.9669-7330', st_tc)],
+        [Paragraph('Jhonatan Dias Dejato', st_tc), Paragraph('Diretor de Engenharia', st_tc), Paragraph('jhonatan@alfaved.com.br', st_tc), Paragraph('(18) 9.9628-8714', st_tc)],
+    ]))
     for item in story:
         if isinstance(item, Table):
             item.setStyle(TableStyle([
@@ -320,8 +272,6 @@ def build_pdf(modelo, tag, projeto, produto, servico, t_in_prod, t_out_prod, t_i
                 ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
                 ('TOPPADDING', (0, 0), (-1, -1), 5),
             ]))
-    story.append(Paragraph('6. Parecer Tecnico e Memorial Descritivo (AlfaVed GenAI)', st_h2))
-    story.append(Paragraph(parecer_ia, st_body))
     doc.build(story, canvasmaker=NumberedCanvas)
     pdf_data = pdf_buffer.getvalue()
     pdf_buffer.close()
@@ -340,13 +290,14 @@ def main():
     .badge-mline { background: #e8f5e9; color: #2e7d32; }
     .badge-widegap { background: #fff3e0; color: #e65100; }
     .badge-semiwelded { background: #fce4ec; color: #c62828; }
+    .contact-card { background: #f0f4f8; border-left: 4px solid #003049; padding: 15px; border-radius: 5px; margin: 5px 0; }
     </style>
     """, unsafe_allow_html=True)
     st.markdown("""
     <div class="main-header">
         <h1>AlfaVed Engenharia Termica</h1>
         <h3>Dimensionador Inteligente de Trocadores de Calor</h3>
-        <p>Banco Alfa Laval | B/M Variants | H=45 L=60 | Semi-Soldadas | WideGap | Parecer com IA</p>
+        <p>Banco Alfa Laval | B/M Variants | H=45 L=60 | Semi-Soldadas | WideGap</p>
     </div>
     """, unsafe_allow_html=True)
     input_col, result_col = st.columns([1, 1.2], gap='large')
@@ -398,73 +349,4 @@ def main():
             st.divider()
             submitted = st.form_submit_button('CALCULAR DIMENSIONAMENTO', use_container_width=True, type='primary')
         if submitted:
-            resultados = calculate_dimensionamento(produto, BANCO_FLUIDOS[produto], modelo, dados_mod, t_in_prod, t_out_prod, t_in_serv, t_out_serv, vazao_prod, BANCO_SERVICOS[servico])
-            parecer_ia = generate_parecer_ia(modelo, tag, projeto, produto, servico, vazao_prod, resultados, tipo_modelo)
-            pdf_bytes = build_pdf(modelo, tag, projeto, produto, servico, t_in_prod, t_out_prod, t_in_serv, t_out_serv, vazao_prod, resultados['vazao_serv'], resultados, parecer_ia, tipo_modelo)
-            st.session_state.resultados = resultados
-            st.session_state.parecer_ia = parecer_ia
-            st.session_state.pdf_bytes = pdf_bytes
-            st.session_state.modelo_res = modelo
-            st.session_state.tipo_modelo_res = tipo_modelo
-            st.session_state.tag_res = tag
-            st.session_state.projeto_res = projeto
-            st.session_state.produto_res = produto
-            st.session_state.servico_res = servico
-            st.session_state.t_in_prod_res = t_in_prod
-            st.session_state.t_out_prod_res = t_out_prod
-            st.session_state.t_in_serv_res = t_in_serv
-            st.session_state.t_out_serv_res = t_out_serv
-            st.session_state.vazao_prod_res = vazao_prod
-            st.success('Calculo e relatorios estruturados com sucesso!')
-            st.rerun()
-    with result_col:
-        if 'resultados' in st.session_state:
-            resultados = st.session_state.resultados
-            st.markdown('### RESULTADOS DO DIMENSIONAMENTO')
-            kpi_col1, kpi_col2, kpi_col3 = st.columns(3)
-            with kpi_col1:
-                st.markdown('<div class="metric-box">', unsafe_allow_html=True)
-                st.metric('Carga Termica', f'{resultados["carga_kw"]:.2f} kW')
-                st.markdown('</div>', unsafe_allow_html=True)
-            with kpi_col2:
-                st.markdown('<div class="metric-box">', unsafe_allow_html=True)
-                st.metric('Area Requerida', f'{resultados["area_m2"]:.2f} m2')
-                st.markdown('</div>', unsafe_allow_html=True)
-            with kpi_col3:
-                st.markdown('<div class="metric-box">', unsafe_allow_html=True)
-                st.metric('Quantidade Placas', f'{resultados["placas"]}')
-                st.markdown('</div>', unsafe_allow_html=True)
-            st.divider()
-            st.markdown('#### Analise de Turbulencia')
-            turb_col1, turb_col2 = st.columns(2)
-            with turb_col1:
-                st.markdown('<div class="section-card">', unsafe_allow_html=True)
-                st.markdown('**Lado Produto**')
-                st.metric('Reynolds', f'{resultados["reynolds_prod"]:.0f}', resultados['regime_prod'])
-                st.caption(resultados['desc_prod'])
-                st.markdown('</div>', unsafe_allow_html=True)
-            with turb_col2:
-                st.markdown('<div class="section-card">', unsafe_allow_html=True)
-                st.markdown('**Lado Servico**')
-                st.metric('Reynolds', f'{resultados["reynolds_serv"]:.0f}', resultados['regime_serv'])
-                st.caption(resultados['desc_serv'])
-                st.markdown('</div>', unsafe_allow_html=True)
-            st.divider()
-            st.markdown('#### Configuracao Recomendada')
-            placa_info = ANGULOS_PLACA[resultados['tipo_placa']]
-            placa_col1, placa_col2 = st.columns(2)
-            with placa_col1:
-                st.markdown(f'<div class="result-success"><h4>Tipo de Placa: <strong>{resultados["tipo_placa"]}</strong></h4><p>{placa_info["descricao"]}</p><hr><p><strong>Turbulencia:</strong> {placa_info["turbulencia"]}</p><p><strong>Queda Pressao:</strong> {placa_info["queda_pressao"]}</p><p><strong>Combinacoes:</strong> {placa_info.get("combinacoes", "HH/HL/LL")}</p></div>', unsafe_allow_html=True)
-            with placa_col2:
-                st.markdown(f'<div class="result-warning"><p><strong>Multiplicador U:</strong> {resultados["multiplicador_placa"]:.2f}x</p><p><strong>U Adotado:</strong> {resultados["U_adotado"]:.0f} W/m2K</p><p><strong>LMTD:</strong> {resultados["lmtd"]:.2f} C</p><p><strong>Linha:</strong> {resultados.get("linha_modelo", "N/A")}</p><p><strong>Material:</strong> {resultados.get("material_modelo", "N/A")}</p><p><strong>Conexao:</strong> {resultados.get("conexao", "N/A")}</p></div>', unsafe_allow_html=True)
-            st.info(f"{resultados['justificativa_placa']}")
-            st.divider()
-            st.markdown('#### Documentacao')
-            st.download_button(label='Download Datasheet PDF', data=st.session_state.pdf_bytes, file_name=f'datasheet_{st.session_state.get("tag_res", "TC")}.pdf', mime='application/pdf', use_container_width=True)
-            with st.expander('Ver Parecer Tecnico Completo'):
-                st.markdown(f"**Parecer Tecnico - AlfaVed GenAI**\n\n{st.session_state.parecer_ia}")
-        else:
-            st.markdown('<div class="section-card"><p style="text-align: center; color: #999;">Preencha os dados de entrada e clique em CALCULAR DIMENSIONAMENTO</p></div>', unsafe_allow_html=True)
-
-if __name__ == '__main__':
-    main()
+            resultados = calculate_dimensionamento(produto, BANCO_FLUIDOS[produto], modelo, dados_mod, t_in_prod, t_out_prod, t_in_serv, t_out_serv, vazao_prod, 
