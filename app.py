@@ -349,7 +349,7 @@ def main():
             st.divider()
             submitted = st.form_submit_button('CALCULAR DIMENSIONAMENTO', use_container_width=True, type='primary')
         if submitted:
-           resultados = calculate_dimensionamento(
+            resultados = calculate_dimensionamento(
                 produto, BANCO_FLUIDOS[produto], modelo, dados_mod,
                 t_in_prod, t_out_prod, t_in_serv, t_out_serv,
                 vazao_prod, BANCO_SERVICOS[servico]
@@ -375,12 +375,10 @@ def main():
             st.session_state.vazao_prod_res = vazao_prod
             st.success('Calculo e relatorios estruturados com sucesso!')
             st.rerun()
-
     with result_col:
         if 'resultados' in st.session_state:
             resultados = st.session_state.resultados
             st.markdown('### RESULTADOS DO DIMENSIONAMENTO')
-
             kpi_col1, kpi_col2, kpi_col3 = st.columns(3)
             with kpi_col1:
                 st.markdown('<div class="metric-box">', unsafe_allow_html=True)
@@ -394,7 +392,6 @@ def main():
                 st.markdown('<div class="metric-box">', unsafe_allow_html=True)
                 st.metric('Quantidade Placas', f'{resultados["placas"]}')
                 st.markdown('</div>', unsafe_allow_html=True)
-
             st.divider()
             st.markdown('#### Analise de Turbulencia')
             turb_col1, turb_col2 = st.columns(2)
@@ -410,7 +407,6 @@ def main():
                 st.metric('Reynolds', f'{resultados["reynolds_serv"]:.0f}', resultados['regime_serv'])
                 st.caption(resultados['desc_serv'])
                 st.markdown('</div>', unsafe_allow_html=True)
-
             st.divider()
             st.markdown('#### Configuracao Recomendada')
             placa_info = ANGULOS_PLACA[resultados['tipo_placa']]
@@ -439,7 +435,6 @@ def main():
                     unsafe_allow_html=True
                 )
             st.info(f"{resultados['justificativa_placa']}")
-
             st.divider()
             st.markdown('#### Datasheet Tecnico')
             st.download_button(
@@ -449,32 +444,6 @@ def main():
                 mime='application/pdf',
                 use_container_width=True
             )
-
-            st.divider()
-            st.markdown('#### Responsaveis Tecnicos')
-            st.markdown(
-                '<div class="contact-card">'
-                '<p><strong>Vitor Soares</strong> - Responsavel pelo Projeto<br>'
-                'E-mail: engenharia@alfaved.com.br | Tel: (18) 9.9669-7330</p>'
-                '</div>',
-                unsafe_allow_html=True
-            )
-            st.markdown(
-                '<div class="contact-card">'
-                '<p><strong>Jhonatan Dias Dejato</strong> - Diretor de Engenharia<br>'
-                'E-mail: jhonatan@alfaved.com.br | Tel: (18) 9.9628-8714</p>'
-                '</div>',
-                unsafe_allow_html=True
-            )
-        else:
-            st.markdown(
-                '<div class="section-card">'
-                '<p style="text-align: center; color: #999;">'
-                'Preencha os dados de entrada e clique em '
-                '<strong>CALCULAR DIMENSIONAMENTO</strong>'
-                '</p></div>',
-                unsafe_allow_html=True
-            )
-
-if __name__ == '__main__':
-    main()
+            with st.expander('📄 Visualizar Datasheet na Tela'):
+                st.markdown('#### 1. Informacoes Gerais do Projeto')
+                st.write(f"**Modelo:** {st.session_state.get('modelo_res', 'N/A')}")
