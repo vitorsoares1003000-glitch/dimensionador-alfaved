@@ -1,5 +1,5 @@
 """
-AlfaVed Engenharia Térmica - Dimensionador PHE v2.0
+AlfaVed Engenharia Térmica - Dimensionador PHE v2.1
 Arquivo: app.py
 Deploy: streamlit run app.py
 """
@@ -81,7 +81,7 @@ BANCO_SERVICOS = {
 }
 
 # ============================================================================
-# FUNÇÕES DE ENGENHARIA REVISADAS
+# FUNÇÕES DE ENGENHARIA
 # ============================================================================
 
 def get_calor_latente(temp):
@@ -93,77 +93,49 @@ def get_calor_latente(temp):
     if temp >= 80: return 2308.0
     return 2358.0
 
-def calc_reynolds_real(vazao_kgh, visc_pas, dens_kgm3, dh_m, canal_larg_m, n_placas, arranjo):
-    """
-    Cálculo real de Reynolds considerando geometria do trocador.
-    n_placas: total de placas
-    Canais por lado = n_placas // 2 (aproximado)
-    """
+def calc_reynolds_real(vazao_kgh, visc_pas, dens_kgm3, dh_m, canal_larg_m, n_placas):
+    """Cálculo real de Reynolds considerando geometria do trocador."""
     if vazao_kgh <= 0 or visc_pas <= 0 or dens_kgm3 <= 0:
         return 0.0
     
-    # Número de canais por lado (metade das placas formam canais para cada fluido)
     canais_por_lado = max(1, (n_placas - 1) // 2)
-    
-    # Vazão mássica por canal (kg/s por canal)
     vazao_kgs_total = vazao_kgh / 3600.0
     vazao_por_canal = vazao_kgs_total / canais_por_lado
-    
-    # Área de fluxo de um canal = largura do canal × espaçamento da placa
-    # Espaçamento aproximado = dh/2 para placas corrugadas
     espacamento = dh_m / 2.0
     area_fluxo = canal_larg_m * espacamento
     
     if area_fluxo <= 0:
         return 0.0
     
-    # Velocidade massica (kg/(m²·s)) ou velocidade real
-    G = vazao_por_canal / area_fluxo  # fluxo mássico por área
-    u = vazao_por_canal / (dens_kgm3 * area_fluxo)  # velocidade real (m/s)
-    
-    # Reynolds = (densidade × velocidade × dh) / viscosidade
-    # Ou equivalente: (G × dh) / viscosidade
+    u = vazao_por_canal / (dens_kgm3 * area_fluxo)
     re = (dens_kgm3 * u * dh_m) / visc_pas
     return max(0.0, re)
 
 def calc_prandtl(cp_jkgk, visc_pas, cond_wm2k):
-    """Número de Prandtl = viscosidade × cp / condutividade."""
+    """Número de Prandtl."""
     if cond_wm2k <= 0 or visc_pas <= 0:
         return 0.0
-    pr = (visc_pas * cp_jkgk) / cond_wm2k
-    return pr
+    return (visc_pas * cp_jkgk) / cond_wm2k
 
 def calc_nusselt_placa(re, pr, angulo):
-    """
-    Correlação de Nusselt para trocadores de calor a placas corrugadas.
-    Baseado em correlações empíricas para placas Alfa Laval.
-    """
+    """Correlação de Nusselt para placas corrugadas."""
     if re <= 0 or pr <= 0:
         return 5.0
     
-    # Constantes dependendo do ângulo de corrugação
-    if "H" in angulo:  # High angle, maior turbulência
-        C = 0.3
-        m = 0.663
-        n = 0.333
-    elif "L" in angulo:  # Low angle, menor turbulência
-        C = 0.14
-        m = 0.651
-        n = 0.333
-    else:  # Misto ou automático
-        C = 0.2
-        m = 0.658
-        n = 0.333
+    if "H" in angulo:
+        C, m = 0.3, 0.663
+    elif "L" in angulo:
+        C, m = 0.14, 0.651
+    else:
+        C, m = 0.2, 0.658
     
-    if re < 20:  # Regime laminar
+    n = 0.333
+    
+    if re < 20:
         nu = 0.55 * (re ** 0.25) * (pr ** n)
-    elif re < 10000:  # Regime de transição
-        nu = C * (re ** m) * (pr ** n)
-    else:  # Regime turbulento
+    else:
         nu = C * (re ** m) * (pr ** n)
     
-    # Correção para propriedades variáveis (viscosidade na parede diferente)
-    # Simplificação: não aplicamos correção de viscosidade aqui
     return max(3.0, nu)
 
 def calc_h_coef(nu, cond_wm2k, dh_m):
@@ -172,108 +144,76 @@ def calc_h_coef(nu, cond_wm2k, dh_m):
         return 0.0
     return (nu * cond_wm2k) / dh_m
 
-def calc_u_global(h_p, h_s, esp_placa=0.0005, k_placa=17.0, r_fouling_p=0.0001, r_fouling_s=0.0001):
-    """
-    Cálculo real do coeficiente global U considerando:
-    - Resistência convectiva do produto (1/h_p)
-    - Resistência da placa (esp/k)
-    - Resistência convectiva do serviço (1/h_s)
-    - Resistências de fouling (incrustação)
-    
-    Retorna U em W/m²K
-    """
+def calc_u_global(h_p, h_s, esp_placa=0.0005, k_placa=17.0, r_fp=0.0001, r_fs=0.0001):
+    """Coeficiente global U considerando todas as resistências térmicas."""
     if h_p <= 0 or h_s <= 0:
         return 0.0
-    
-    # Resistências térmicas totais (m²K/W)
-    r_total = (1.0 / h_p) + r_fouling_p + (esp_placa / k_placa) + r_fouling_s + (1.0 / h_s)
-    
+    r_total = (1.0 / h_p) + r_fp + (esp_placa / k_placa) + r_fs + (1.0 / h_s)
     if r_total <= 0:
         return 0.0
-    
-    U = 1.0 / r_total
-    return U
+    return 1.0 / r_total
 
 def calc_lmtd(t1_ent, t1_sai, t2_ent, t2_sai, fluxo="contra"):
-    """
-    Cálculo correto do LMTD.
-    
-    t1: temperaturas do fluido quente (entrada, saída)
-    t2: temperaturas do fluido frio (entrada, saída)
-    fluxo: "contra" (contra-corrente) ou "co" (co-corrente)
-    """
+    """LMTD para contra-corrente ou co-corrente."""
     if fluxo == "co":
-        # Co-corrente: ambos fluidos entram pelo mesmo lado
         dt1 = abs(t1_ent - t2_ent)
         dt2 = abs(t1_sai - t2_sai)
     else:
-        # Contra-corrente: fluidos entram em lados opostos
         dt1 = abs(t1_ent - t2_sai)
         dt2 = abs(t1_sai - t2_ent)
     
-    # Evitar divisão por zero
     if dt1 <= 0 or dt2 <= 0:
-        return 0.1
-    
+        return max(dt1, dt2, 0.1)
     if abs(dt1 - dt2) < 0.001:
-        return dt1  # Diferenças iguais, LMTD = dt
-    
-    lmtd = (dt1 - dt2) / math.log(dt1 / dt2)
-    return lmtd
+        return dt1
+    return (dt1 - dt2) / math.log(dt1 / dt2)
 
-def calc_fator_f(P, R, n_passes):
+def calc_fator_f_corrigido(P, R, n_passes):
     """
     Fator de correção F para LMTD em arranjos multi-passe.
+    Versão robusta - evita erros numéricos.
     
-    P = (t_saida - t_entrada) / (T_entrada - t_entrada)  - efetividade térmica
-    R = (T_entrada - T_saida) / (t_saida - t_entrada)    - razão de capacidade
-    n_passes: número de passes (1 ou 2)
-    
-    Para 1/1 (contra-corrente puro): F = 1.0
-    Para 2/2: usa correlação aproximada para shell-and-tube adaptada
+    Para PHE a placas:
+    - 1/1 (contra-corrente puro): F = 1.0
+    - 2/2: F tipicamente 0.92-0.98 para PHE bem projetados
     """
     if n_passes == 1:
         return 1.0
     
-    # Limites para estabilidade numérica
+    # Limitar P e R para evitar instabilidades
     P = max(0.001, min(0.999, P))
-    R = max(0.001, R)
+    R = max(0.001, min(10.0, R))
     
-    if R == 1.0:
-        P1 = P / n_passes
+    # Para PHE 2/2, usar aproximação simplificada robusta
+    # Baseado em Shah & Sekulic (2003) - Heat Exchangers Design Handbook
+    # Para arranjos 2/2 em PHE, F é geralmente > 0.9 quando bem projetado
+    if R < 0.2:
+        f_est = 0.98
+    elif R < 0.5:
+        f_est = 0.95
+    elif R < 1.0:
+        f_est = 0.93
+    elif R < 2.0:
+        f_est = 0.90
     else:
-        P1 = (1.0 - ((1.0 - P * R) / (1.0 - P)) ** (1.0 / n_passes)) / R
+        f_est = 0.88
     
-    # Correlação simplificada para 2 passes (aproximação de Bowman-Mueller-Nagle)
-    # Para contra-corrente com 2 passes em ambos lados
-    S = (P1 * R) ** 0.5
+    # Penalidade se P é muito alto (aproximação térmica excessiva)
+    if P > 0.8:
+        f_est *= 0.98
     
-    # Fator F aproximado (simplificado para PHE 2/2)
-    if S >= 1.0:
-        return 0.95
-    
-    # Fórmula aproximada para 2-2
-    num = S * math.log((2.0 - P1 * (1.0 + R - S)) / (2.0 - P1 * (1.0 + R + S)))
-    den = (2.0 - P1 * (1.0 + R - S)) * math.log((2.0 - P1 * (1.0 + R - S)) / (2.0 - P1 * (1.0 + R + S)))
-    
-    if den == 0:
-        return 0.9
-    
-    F = num / den
-    return max(0.5, min(1.0, F))
+    return max(0.75, min(1.0, f_est))
 
 def calc_area(Q_w, U, lmtd, F=1.0):
     """Área de transferência de calor (m²)."""
     if U <= 0 or lmtd <= 0 or F <= 0:
         return 0.0
-    A = Q_w / (U * lmtd * F)
-    return A
+    return Q_w / (U * lmtd * F)
 
 def calc_vazao_servico(Q_w, cp_jkgk, dt):
     """Vazão mássica do serviço (kg/h)."""
     if cp_jkgk <= 0 or dt <= 0:
         return 0.0
-    # Q = m_dot * cp * dt  =>  m_dot = Q / (cp * dt)
     m_dot_kgs = Q_w / (cp_jkgk * dt)
     return m_dot_kgs * 3600.0
 
@@ -282,10 +222,8 @@ def calc_num_placas(area_total, area_placa):
     if area_placa <= 0:
         return 0
     n = math.ceil(area_total / area_placa)
-    # Mínimo: 3 placas (1+1 para cada fluido + 1 de transição)
     if n < 3:
         n = 3
-    # Para PHE, número ímpar é preferível para balanceamento
     if n % 2 == 0:
         n += 1
     return n
@@ -309,73 +247,41 @@ def recomendar_gaxeta(fluido_p, fluido_s, t_max):
     return "EPDM", "Melhor custo-benefício para fluidos aquosos."
 
 def calc_press_drop_real(re, n_placas, angulo, vazao_kgh, dens_kgm3, canal_larg_m, dh_m, visc_pas):
-    """
-    Cálculo realista de queda de pressão em trocadores a placas.
-    
-    Considera:
-    - Perda de carga no canal das placas (fricção)
-    - Perdas localizadas nas portas (entradas/saídas)
-    """
+    """Cálculo realista de queda de pressão."""
     if re <= 0 or n_placas < 2:
         return 0.0
     
-    # Número de canais por lado
     canais_por_lado = max(1, (n_placas - 1) // 2)
-    
-    # Velocidade no canal
     vazao_kgs = vazao_kgh / 3600.0
     espacamento = dh_m / 2.0
     area_fluxo = canal_larg_m * espacamento
+    
     if area_fluxo <= 0:
         return 0.0
     
     vazao_por_canal = vazao_kgs / canais_por_lado
     u = vazao_por_canal / (dens_kgm3 * area_fluxo)
     
-    # Fator de fricção dependendo de Re e ângulo
     if "H" in angulo:
-        # Alto ângulo = maior turbulência = maior fator de fricção
-        if re < 2000:
-            f = 16.0 / re
-        else:
-            f = 0.5 / (re ** 0.2)
+        f = 0.5 / (re ** 0.2) if re >= 2000 else 16.0 / re
     elif "L" in angulo:
-        # Baixo ângulo = menor turbulência
-        if re < 2000:
-            f = 16.0 / re
-        else:
-            f = 0.3 / (re ** 0.2)
+        f = 0.3 / (re ** 0.2) if re >= 2000 else 16.0 / re
     else:
-        if re < 2000:
-            f = 16.0 / re
-        else:
-            f = 0.4 / (re ** 0.2)
+        f = 0.4 / (re ** 0.2) if re >= 2000 else 16.0 / re
     
-    # Comprimento hidráulico do canal (estimado: 2× comprimento da placa)
-    comp_hidraulico = 2.0 * 0.5  # estimativa genérica, ajustar por modelo
-    
-    # Perda de carga por fricção no canal (Pa)
-    # dP = 4f × (L/dh) × (rho × u² / 2)
+    comp_hidraulico = 2.0 * 0.5
     dp_canal = 4.0 * f * (comp_hidraulico / dh_m) * (dens_kgm3 * u ** 2 / 2.0)
     
-    # Perda localizada nas portas (aproximação)
-    # Velocidade na porta (tubo de conexão) - assumindo tubo de 2" = 0.05m diâm
     d_porta = 0.05
     area_porta = math.pi * (d_porta ** 2) / 4.0
     u_porta = vazao_kgs / (dens_kgm3 * area_porta)
-    k_local = 3.0  # coeficiente de perda localizada (entradas, saídas, mudanças de direção)
+    k_local = 3.0
     dp_portas = k_local * (dens_kgm3 * u_porta ** 2 / 2.0)
     
-    dp_total = dp_canal + dp_portas
-    
-    # Converter para kPa
-    return dp_total / 1000.0
+    return (dp_canal + dp_portas) / 1000.0
 
 def get_pass_arrangement(vazao_kgh, lmtd, temp_max):
-    """
-    Determina arranjo de passes baseado em critérios térmicos e hidráulicos.
-    """
-    # Se LMTD é muito baixo (< 3°C) ou vazão muito alta, multi-passe ajuda
+    """Determina arranjo de passes."""
     if lmtd < 3.0 or vazao_kgh > 20000:
         return "2/2", "Two Pass", "Necessário para melhor aproximação térmica ou gerenciar alta vazão."
     return "1/1", "Single Pass", "Arranjo padrão para máxima eficiência em contra-corrente."
@@ -397,11 +303,7 @@ def determinar_conexoes(arranjo_passe):
             "produto_saida": "Prato de Pressão (Pressure Plate)",
             "servico_entrada": "Prato de Pressão (Pressure Plate)",
             "servico_saida": "Cabeçote Fixo (Frame Plate)",
-            "descricao": (
-                "Arranjo 2/2: Conexões em lados opostos obrigatoriamente. "
-                "Cada fluido entra de um lado, percorre o 1º passe, "
-                "chega ao cabeçote oposto e retorna no 2º passe."
-            ),
+            "descricao": "Arranjo 2/2: Conexões em lados opostos obrigatoriamente para reversão de fluxo.",
             "port_arrangement": "Pass 1: Fixo -> Móvel | Pass 2: Móvel -> Fixo",
         }
 
@@ -418,25 +320,18 @@ def gerar_pdf(
     dp_p, dp_s, gaxeta, gaxeta_desc,
     data_str,
 ):
-    buffer = io.BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=1.5 * cm, bottomMargin=1.5 * cm)
+    buf = io.BytesIO()
+    doc = SimpleDocTemplate(buf, pagesize=A4, rightMargin=1.5*cm, leftMargin=1.5*cm,
+                            topMargin=1.5*cm, bottomMargin=1.5*cm)
     styles = getSampleStyleSheet()
 
     style_title = ParagraphStyle(
-        "TitleCustom",
-        parent=styles["Heading1"],
-        fontSize=16,
-        textColor=colors.HexColor("#003049"),
-        spaceAfter=12,
-        alignment=1,
+        "TitleCustom", parent=styles["Heading1"], fontSize=16,
+        textColor=colors.HexColor("#003049"), spaceAfter=12, alignment=1,
     )
-    style_heading2 = ParagraphStyle(
-        "Heading2Custom",
-        parent=styles["Heading2"],
-        fontSize=12,
-        textColor=colors.HexColor("#003049"),
-        spaceAfter=8,
-        spaceBefore=10,
+    style_h2 = ParagraphStyle(
+        "Heading2Custom", parent=styles["Heading2"], fontSize=12,
+        textColor=colors.HexColor("#003049"), spaceAfter=8, spaceBefore=10,
     )
     style_normal = styles["Normal"]
     style_normal.fontSize = 10
@@ -449,90 +344,70 @@ def gerar_pdf(
     story.append(Paragraph(f"<b>Data:</b> {data_str}", style_normal))
     story.append(Spacer(1, 12))
 
-    # Info geral
-    story.append(Paragraph("<b>1. Informações do Projeto</b>", style_heading2))
-    dados_geral = [
+    story.append(Paragraph("<b>1. Informações do Projeto</b>", style_h2))
+    t1 = Table([
         ["Tag do Equipamento", tag],
         ["Projeto", projeto],
         ["Modelo Selecionado", modelo],
         ["Ângulo da Placa", angulo],
         ["Configuração de Fluxo", fluxo_config],
         ["Arranjo de Passes", arranjo],
-    ]
-    t_geral = Table(dados_geral, colWidths=[8 * cm, 8 * cm])
-    t_geral.setStyle(
-        TableStyle(
-            [
-                ("BACKGROUND", (0, 0), (0, -1), colors.HexColor("#f0f4f8")),
-                ("ALIGN", (0, 0), (-1, -1), "LEFT"),
-                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-                ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
-                ("FONTSIZE", (0, 0), (-1, -1), 10),
-                ("TOPPADDING", (0, 0), (-1, -1), 4),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
-            ]
-        )
-    )
-    story.append(t_geral)
+    ], colWidths=[8*cm, 8*cm])
+    t1.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (0, -1), colors.HexColor("#f0f4f8")),
+        ("ALIGN", (0, 0), (-1, -1), "LEFT"),
+        ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
+        ("FONTSIZE", (0, 0), (-1, -1), 10),
+        ("TOPPADDING", (0, 0), (-1, -1), 4),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+    ]))
+    story.append(t1)
     story.append(Spacer(1, 10))
 
-    # Conexões
-    story.append(Paragraph("<b>2. Configuração de Conexões</b>", style_heading2))
+    story.append(Paragraph("<b>2. Configuração de Conexões</b>", style_h2))
     story.append(Paragraph(f"<b>Descrição:</b> {conexoes['descricao']}", style_normal))
     story.append(Paragraph(f"<b>Port Arrangement:</b> {conexoes['port_arrangement']}", style_normal))
-    dados_conn = [
+    t2 = Table([
         ["", "Entrada", "Saída"],
         ["Produto", conexoes["produto_entrada"], conexoes["produto_saida"]],
         ["Serviço", conexoes["servico_entrada"], conexoes["servico_saida"]],
-    ]
-    t_conn = Table(dados_conn, colWidths=[5 * cm, 5.5 * cm, 5.5 * cm])
-    t_conn.setStyle(
-        TableStyle(
-            [
-                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#003049")),
-                ("TEXTCOLOR", (0, 0), (-1, 0), colors.whitesmoke),
-                ("BACKGROUND", (0, 1), (0, -1), colors.HexColor("#f0f4f8")),
-                ("ALIGN", (0, 0), (-1, -1), "CENTER"),
-                ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
-                ("FONTSIZE", (0, 0), (-1, -1), 10),
-                ("TOPPADDING", (0, 0), (-1, -1), 4),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
-            ]
-        )
-    )
-    story.append(t_conn)
+    ], colWidths=[5*cm, 5.5*cm, 5.5*cm])
+    t2.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#003049")),
+        ("TEXTCOLOR", (0, 0), (-1, 0), colors.whitesmoke),
+        ("BACKGROUND", (0, 1), (0, -1), colors.HexColor("#f0f4f8")),
+        ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+        ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
+        ("FONTSIZE", (0, 0), (-1, -1), 10),
+        ("TOPPADDING", (0, 0), (-1, -1), 4),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+    ]))
+    story.append(t2)
     story.append(Spacer(1, 10))
 
-    # Dados operacionais
-    story.append(Paragraph("<b>3. Dados Operacionais</b>", style_heading2))
-    dados_op = [
+    story.append(Paragraph("<b>3. Dados Operacionais</b>", style_h2))
+    t3 = Table([
         ["Parâmetro", "Produto", "Serviço"],
         ["Fluido", prod, serv],
         ["Vazão (kg/h)", f"{vazao_p:,.0f}", f"{vazao_s_calc:,.0f}"],
         ["Temp. Entrada (°C)", f"{t_in_p:.1f}", f"{t_in_s:.1f}"],
         ["Temp. Saída (°C)", f"{t_out_p:.1f}", f"{t_out_s:.1f}"],
-    ]
-    t_op = Table(dados_op, colWidths=[6 * cm, 5 * cm, 5 * cm])
-    t_op.setStyle(
-        TableStyle(
-            [
-                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#003049")),
-                ("TEXTCOLOR", (0, 0), (-1, 0), colors.whitesmoke),
-                ("BACKGROUND", (0, 1), (0, -1), colors.HexColor("#f0f4f8")),
-                ("ALIGN", (0, 0), (-1, -1), "CENTER"),
-                ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
-                ("FONTSIZE", (0, 0), (-1, -1), 10),
-                ("TOPPADDING", (0, 0), (-1, -1), 4),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
-            ]
-        )
-    )
-    story.append(t_op)
+    ], colWidths=[6*cm, 5*cm, 5*cm])
+    t3.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#003049")),
+        ("TEXTCOLOR", (0, 0), (-1, 0), colors.whitesmoke),
+        ("BACKGROUND", (0, 1), (0, -1), colors.HexColor("#f0f4f8")),
+        ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+        ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
+        ("FONTSIZE", (0, 0), (-1, -1), 10),
+        ("TOPPADDING", (0, 0), (-1, -1), 4),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+    ]))
+    story.append(t3)
     story.append(Spacer(1, 10))
 
-    # Resultados térmicos
-    story.append(Paragraph("<b>4. Resultados do Dimensionamento</b>", style_heading2))
-    dados_res = [
+    story.append(Paragraph("<b>4. Resultados do Dimensionamento</b>", style_h2))
+    res_data = [
         ["Carga Térmica (kW)", f"{carga_kw:.2f}"],
         ["Carga Térmica (W)", f"{carga_w:,.0f}"],
         ["LMTD (°C)", f"{lmtd:.2f}"],
@@ -551,20 +426,16 @@ def gerar_pdf(
         ["Gaxeta Recomendada", gaxeta],
         ["Observação Gaxeta", gaxeta_desc],
     ]
-    t_res = Table(dados_res, colWidths=[8 * cm, 8 * cm])
-    t_res.setStyle(
-        TableStyle(
-            [
-                ("BACKGROUND", (0, 0), (0, -1), colors.HexColor("#f0f4f8")),
-                ("ALIGN", (0, 0), (-1, -1), "LEFT"),
-                ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
-                ("FONTSIZE", (0, 0), (-1, -1), 10),
-                ("TOPPADDING", (0, 0), (-1, -1), 4),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
-            ]
-        )
-    )
-    story.append(t_res)
+    t4 = Table(res_data, colWidths=[8*cm, 8*cm])
+    t4.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (0, -1), colors.HexColor("#f0f4f8")),
+        ("ALIGN", (0, 0), (-1, -1), "LEFT"),
+        ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
+        ("FONTSIZE", (0, 0), (-1, -1), 10),
+        ("TOPPADDING", (0, 0), (-1, -1), 4),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+    ]))
+    story.append(t4)
     story.append(Spacer(1, 10))
 
     story.append(
@@ -576,8 +447,8 @@ def gerar_pdf(
     )
 
     doc.build(story)
-    buffer.seek(0)
-    return buffer
+    buf.seek(0)
+    return buf
 
 # ============================================================================
 # INTERFACE STREAMLIT
@@ -600,7 +471,6 @@ def main():
             padding: 20px;
             border-radius: 8px;
             box-shadow: 2px 2px 5px rgba(0,0,0,0.1);
-            margin-bottom: 10px;
         }
         .contact-card {
             background: #e9ecef;
@@ -617,7 +487,7 @@ def main():
     st.markdown(
         '<div class="main-header">'
         '<h1>AlfaVed Engenharia Térmica</h1>'
-        '<h3>Dimensionador de Trocadores Alfa Laval v2.0</h3>'
+        '<h3>Dimensionador de Trocadores Alfa Laval v2.1</h3>'
         f'<p>Data: {datetime.now().strftime("%d/%m/%Y")}</p>'
         "</div>",
         unsafe_allow_html=True,
@@ -671,15 +541,9 @@ def main():
     d_s = BANCO_SERVICOS[serv]
     d_m = BANCO_MODELOS[modelo]
 
-    # Temperaturas médias para propriedades
-    t_media_p = (t_in_p + t_out_p) / 2.0
-    t_media_s = (t_in_s + t_out_s) / 2.0
-
-    # Carga térmica (W)
     carga_w = (vazao_p * d_p["cp"] * abs(t_in_p - t_out_p)) / 3600.0
     carga_kw = carga_w / 1000.0
 
-    # Vazão do serviço
     is_vapor = d_s["tipo"] == "vapor"
     if is_vapor:
         hfg = get_calor_latente(t_in_s)
@@ -691,105 +555,60 @@ def main():
         else:
             vazao_s_calc = 0.0
 
-    # LMTD baseado na configuração de fluxo
     fluxo_tipo = "co" if "Co" in fluxo_config else "contra"
     lmtd = calc_lmtd(t_in_p, t_out_p, t_in_s, t_out_s, fluxo=fluxo_tipo)
 
-    # Arranjo de passes
     arranjo, nome_arranjo, desc_arranjo = get_pass_arrangement(vazao_p, lmtd, max(t_in_p, t_out_p))
-    n_passes = 2 if arranjo == "2/2" else 1
-
-    # Fator F de correção LMTD (apenas para multi-passes)
-    # P e R para cálculo do fator F
-    T1 = max(t_in_p, t_out_p)  # quente
-    T2 = min(t_in_p, t_out_p)  # quente
-    t1 = min(t_in_s, t_out_s)  # frio
-    t2 = max(t_in_s, t_out_s)  # frio
-    
-    dt_hot = abs(T1 - T2)
-    dt_cold = abs(t2 - t1)
-    
-    P_f = dt_cold / (T1 - t1) if (T1 - t1) > 0 else 0.5
-    R_f = dt_hot / dt_cold if dt_cold > 0 else 1.0
-    
-    fator_f = calc_fator_f(P_f, R_f, n_passes)
-
-    # Determinar conexões
+    n_passes_int = 2 if arranjo == "2/2" else 1
     conexoes = determinar_conexoes(arranjo)
 
-    # ============================================================================
-    # CÁLCULO ITERATIVO DE PLACAS E COEFICIENTES
-    # ============================================================================
+    # Fator F
+    T1 = max(t_in_p, t_out_p)
+    T2 = min(t_in_p, t_out_p)
+    t1 = min(t_in_s, t_out_s)
+    t2 = max(t_in_s, t_out_s)
+    dt_hot = abs(T1 - T2)
+    dt_cold = abs(t2 - t1)
+    P_f = dt_cold / (T1 - t1) if (T1 - t1) > 0 else 0.5
+    R_f = dt_hot / dt_cold if dt_cold > 0 else 1.0
+    fator_f = calc_fator_f_corrigido(P_f, R_f, n_passes_int)
 
-    # Primeira estimativa: usar U típico do modelo para estimar número de placas
-    U_teorico = 4000  # W/m²K típico para placas
+    # Iteração para número de placas e coeficientes
+    U_teorico = 4000.0
     area_estimada = calc_area(carga_w, U_teorico, lmtd, fator_f)
     n_placas_est = calc_num_placas(area_estimada, d_m["area"])
 
-    # Agora calcular Reynolds, Prandtl, Nusselt e h para ambos os lados
-    # com o número estimado de placas
-    re_p = calc_reynolds_real(
-        vazao_p, d_p["visc"], d_p["dens"], d_m["dh"],
-        d_m["canal_larg"], n_placas_est, arranjo
-    )
-    re_s = calc_reynolds_real(
-        vazao_s_calc, d_s["visc"], d_s["dens"], d_m["dh"],
-        d_m["canal_larg"], n_placas_est, arranjo
-    )
+    re_p = calc_reynolds_real(vazao_p, d_p["visc"], d_p["dens"], d_m["dh"], d_m["canal_larg"], n_placas_est)
+    re_s = calc_reynolds_real(vazao_s_calc, d_s["visc"], d_s["dens"], d_m["dh"], d_m["canal_larg"], n_placas_est)
 
-    # Número de Prandtl
     pr_p = calc_prandtl(d_p["cp"], d_p["visc"], d_p["cond"])
     pr_s = calc_prandtl(d_s["cp"], d_s["visc"], d_s["cond"])
 
-    # Nusselt e coeficiente convectivo h
     nu_p = calc_nusselt_placa(re_p, pr_p, angulo_sel)
     nu_s = calc_nusselt_placa(re_s, pr_s, angulo_sel)
 
     h_p = calc_h_coef(nu_p, d_p["cond"], d_m["dh"])
     h_s = calc_h_coef(nu_s, d_s["cond"], d_m["dh"])
 
-    # U global real considerando resistências individuais
     U_calc = calc_u_global(h_p, h_s, esp_placa=0.0005, k_placa=17.0)
 
-    # Recalcular área e número de placas com U real
     area_req = calc_area(carga_w, U_calc, lmtd, fator_f)
     n_placas = calc_num_placas(area_req, d_m["area"])
 
-    # Se o número de placas mudou significativamente, pode-se iterar novamente
-    # Para simplificar, usamos o valor final
-
-    # Recalcular Reynolds com número final de placas
-    re_p = calc_reynolds_real(
-        vazao_p, d_p["visc"], d_p["dens"], d_m["dh"],
-        d_m["canal_larg"], n_placas, arranjo
-    )
-    re_s = calc_reynolds_real(
-        vazao_s_calc, d_s["visc"], d_s["dens"], d_m["dh"],
-        d_m["canal_larg"], n_placas, arranjo
-    )
-
-    # Recalcular h com Reynolds atualizado
+    # Recalcular com número final de placas
+    re_p = calc_reynolds_real(vazao_p, d_p["visc"], d_p["dens"], d_m["dh"], d_m["canal_larg"], n_placas)
+    re_s = calc_reynolds_real(vazao_s_calc, d_s["visc"], d_s["dens"], d_m["dh"], d_m["canal_larg"], n_placas)
     nu_p = calc_nusselt_placa(re_p, pr_p, angulo_sel)
     nu_s = calc_nusselt_placa(re_s, pr_s, angulo_sel)
     h_p = calc_h_coef(nu_p, d_p["cond"], d_m["dh"])
     h_s = calc_h_coef(nu_s, d_s["cond"], d_m["dh"])
     U_calc = calc_u_global(h_p, h_s)
-
-    # Recalcular área final
     area_req = calc_area(carga_w, U_calc, lmtd, fator_f)
     n_placas = calc_num_placas(area_req, d_m["area"])
 
-    # Queda de pressão
-    dp_p = calc_press_drop_real(
-        re_p, n_placas, angulo_sel, vazao_p, d_p["dens"],
-        d_m["canal_larg"], d_m["dh"], d_p["visc"]
-    )
-    dp_s = calc_press_drop_real(
-        re_s, n_placas, angulo_sel, vazao_s_calc, d_s["dens"],
-        d_m["canal_larg"], d_m["dh"], d_s["visc"]
-    )
+    dp_p = calc_press_drop_real(re_p, n_placas, angulo_sel, vazao_p, d_p["dens"], d_m["canal_larg"], d_m["dh"], d_p["visc"])
+    dp_s = calc_press_drop_real(re_s, n_placas, angulo_sel, vazao_s_calc, d_s["dens"], d_m["canal_larg"], d_m["dh"], d_s["visc"])
 
-    # Gaxeta
     t_max = max(t_in_p, t_out_p, t_in_s, t_out_s)
     gaxeta, gaxeta_desc = recomendar_gaxeta(prod, serv, t_max)
 
@@ -810,7 +629,6 @@ def main():
         m5.metric("Nº Placas", f"{n_placas}")
         m6.metric("U Global", f"{U_calc:.0f} W/m²K")
 
-        # Diagnóstico térmico
         st.markdown("#### Diagnóstico Térmico")
         col_d1, col_d2 = st.columns(2)
         with col_d1:
@@ -822,7 +640,6 @@ def main():
             st.metric("Pr Serviço", f"{pr_s:.2f}")
             st.metric("h Serviço", f"{h_s:.0f} W/m²K")
 
-        # Regime de escoamento
         regime_p = "Laminar" if re_p < 2000 else ("Transição" if re_p < 10000 else "Turbulento")
         regime_s = "Laminar" if re_s < 2000 else ("Transição" if re_s < 10000 else "Turbulento")
         st.caption(f"Regime Produto: **{regime_p}** | Regime Serviço: **{regime_s}**")
@@ -842,17 +659,15 @@ def main():
         st.caption(conexoes["descricao"])
 
         st.markdown("#### Dados do Modelo")
-        st.json(
-            {
-                "Modelo": modelo,
-                "Categoria": d_m["cat"],
-                "Área/Placa": f"{d_m['area']} m²",
-                "P Máx": f"{d_m['Pmax']} bar",
-                "T Máx": f"{d_m['Tmax']} °C",
-                "Diâm. Hidráulico": f"{d_m['dh']*1000:.1f} mm",
-                "Conexão": d_m["conn"],
-            }
-        )
+        st.json({
+            "Modelo": modelo,
+            "Categoria": d_m["cat"],
+            "Área/Placa": f"{d_m['area']} m²",
+            "P Máx": f"{d_m['Pmax']} bar",
+            "T Máx": f"{d_m['Tmax']} °C",
+            "Diâm. Hidráulico": f"{d_m['dh']*1000:.1f} mm",
+            "Conexão": d_m["conn"],
+        })
 
         st.markdown("#### Recomendação de Vedação")
         st.success(f"**{gaxeta}** — {gaxeta_desc}")
@@ -862,7 +677,6 @@ def main():
         col_dp1.metric("ΔP Produto", f"{dp_p:.2f} kPa")
         col_dp2.metric("ΔP Serviço", f"{dp_s:.2f} kPa")
 
-        # Alertas de projeto
         st.markdown("#### Verificações de Projeto")
         checks = []
         if t_max > d_m["Tmax"]:
@@ -884,7 +698,6 @@ def main():
         else:
             st.success("✅ Todos os parâmetros dentro dos limites recomendados.")
 
-        # PDF
         data_str = datetime.now().strftime("%d/%m/%Y")
         pdf_buffer = gerar_pdf(
             tag, projeto, modelo, angulo_sel, nome_arranjo, conexoes, fluxo_config,
