@@ -64,61 +64,190 @@ BANCO_SERVICOS = {
     "Oleo Termico": {"cp": 2.10, "visc": 0.012, "dens": 860, "cond": 0.13, "h_vap": None}
 }
 
+
+def validate_temperatures(t_in, t_out, fluid_name):
+    """
+    Valida se as temperaturas de entrada e saída são diferentes.
+    
+    Args:
+        t_in: Temperatura de entrada (°C)
+        t_out: Temperatura de saída (°C)
+        fluid_name: Nome do fluido (para mensagem de erro)
+        
+    Returns:
+        tuple: (is_valid, message)
+    """
+    if abs(t_in - t_out) < 0.1:
+        return False, f"Erro: {fluid_name} - Temperatura de entrada e saída devem diferir em pelo menos 0.1°C"
+    return True, ""
+
+
 def calc_lmtd(t1e, t1s, t2e, t2s):
-    dt1 = abs(t1e - t2s)
-    dt2 = abs(t1s - t2e)
+    """
+    Calcula a Diferença Média Logarítmica de Temperatura (LMTD).
+    Considera configuração em contracorrente.
+    
+    Args:
+        t1e: Temperatura entrada lado 1 (°C)
+        t1s: Temperatura saída lado 1 (°C)
+        t2e: Temperatura entrada lado 2 (°C)
+        t2s: Temperatura saída lado 2 (°C)
+        
+    Returns:
+        float: LMTD em °C
+    """
+    dt1 = abs(t1e - t2s)  # Diferença entre entrada produto e saída serviço
+    dt2 = abs(t1s - t2e)  # Diferença entre saída produto e entrada serviço
+    
+    # Evitar divisão por zero
     if abs(dt1 - dt2) < 0.001:
         return max(dt1, 0.001)
+    
     try:
-        return (dt1 - dt2) / math.log(dt1 / dt2)
+        if dt1 > 0 and dt2 > 0:
+            return (dt1 - dt2) / math.log(dt1 / dt2)
+        else:
+            return 0.001
     except (ValueError, ZeroDivisionError):
         return 0.001
 
+
 def calc_reynolds(vazao_kgh, visc, dens, dh, w_placa):
+    """
+    Calcula o número de Reynolds.
+    
+    Args:
+        vazao_kgh: Vazão em kg/h
+        visc: Viscosidade dinâmica (Pa·s)
+        dens: Densidade (kg/m³)
+        dh: Diâmetro hidráulico (m)
+        w_placa: Largura da placa (m)
+        
+    Returns:
+        float: Número de Reynolds
+    """
     if visc <= 0 or dens <= 0 or w_placa <= 0:
         return 0
-    v_ms = (vazao_kgh / 3600) / (dens * w_placa * 0.003)
-    re = (dens * v_ms * dh) / visc
-    return re if not math.isnan(re) else 0
+    
+    try:
+        v_ms = (vazao_kgh / 3600) / (dens * w_placa * 0.003)
+        re = (dens * v_ms * dh) / visc
+        return re if not (math.isnan(re) or math.isinf(re)) else 0
+    except (ZeroDivisionError, ValueError):
+        return 0
+
 
 def calc_nusselt(re, pr):
-    return 0.3 * (re**0.67) * (pr**0.33)
+    """
+    Calcula o número de Nusselt usando correlação de Gnielinski.
+    
+    Args:
+        re: Número de Reynolds
+        pr: Número de Prandtl
+        
+    Returns:
+        float: Número de Nusselt
+    """
+    if re <= 0 or pr <= 0:
+        return 1.0
+    
+    try:
+        nu = 0.3 * (re ** 0.67) * (pr ** 0.33)
+        return nu if not (math.isnan(nu) or math.isinf(nu)) else 1.0
+    except (ValueError, OverflowError):
+        return 1.0
+
 
 def calc_vapor_kgh(carga_kw, h_vap_kjkg):
+    """
+    Calcula a vazão de vapor necessária.
+    
+    Args:
+        carga_kw: Carga térmica em kW
+        h_vap_kjkg: Entalpia de vaporização em kJ/kg
+        
+    Returns:
+        float or None: Vazão de vapor em kg/h, ou None se não aplicável
+    """
     if h_vap_kjkg and h_vap_kjkg > 0:
         return (carga_kw * 3600) / h_vap_kjkg
     return None
 
+
 def calc_dimensionamento(mod_key, prod_key, serv_key, v_prod, t1e, t1s, t2e, t2s):
+    """
+    Realiza o dimensionamento completo do trocador de calor.
+    
+    Args:
+        mod_key: Chave do modelo
+        prod_key: Chave do fluido produto
+        serv_key: Chave do fluido serviço
+        v_prod: Vazão do produto em kg/h
+        t1e: Temperatura entrada produto (°C)
+        t1s: Temperatura saída produto (°C)
+        t2e: Temperatura entrada serviço (°C)
+        t2s: Temperatura saída serviço (°C)
+        
+    Returns:
+        dict: Resultados do dimensionamento ou erro
+    """
+    # Validações
+    is_valid, msg = validate_temperatures(t1e, t1s, "Produto")
+    if not is_valid:
+        raise ValueError(msg)
+    
+    is_valid, msg = validate_temperatures(t2e, t2s, "Serviço")
+    if not is_valid:
+        raise ValueError(msg)
+    
+    if v_prod <= 0:
+        raise ValueError("Vazão do produto deve ser maior que zero")
+    
     m = BANCO_MODELOS[mod_key]
     p = BANCO_FLUIDOS[prod_key]
     s = BANCO_SERVICOS[serv_key]
     
+    # Cálculo da carga térmica
     carga = (v_prod * p['cp'] * abs(t1e - t1s)) / 3600
     
+    # Cálculo da vazão de serviço
     dt_serv = abs(t2e - t2s)
     v_serv = 0
-    if dt_serv > 0:
+    if dt_serv > 0.001:
         v_serv = (carga * 3600) / (s['cp'] * dt_serv)
+    else:
+        raise ValueError("Diferença de temperatura do serviço muito pequena")
     
+    # LMTD
     lmtd = calc_lmtd(t1e, t1s, t2e, t2s)
     
+    # Reynolds
     re_p = calc_reynolds(v_prod, p['visc'], p['dens'], m['dh'], m['w']/1000)
     re_s = calc_reynolds(v_serv, s['visc'], s['dens'], m['dh'], m['w']/1000)
     
+    # Prandtl
     pr_p = (p['cp'] * 1000 * p['visc']) / p['cond'] if p['cond'] > 0 else 1
     pr_s = (s['cp'] * 1000 * s['visc']) / s['cond'] if s['cond'] > 0 else 1
     
+    # Coeficientes de convecção
     h_p = (calc_nusselt(re_p, pr_p) * p['cond']) / m['dh']
     h_s = (calc_nusselt(re_s, pr_s) * s['cond']) / m['dh']
     
+    # U global (resistências: convecção produto, convecção serviço, condução placa, resistência de fouling)
     u_global = 1 / (1/h_p + 1/h_s + 0.0005/17 + 0.0001)
-    area_req = (carga * 1000) / (u_global * lmtd) if (u_global * lmtd) > 0 else 0
     
+    # Área requerida
+    if (u_global * lmtd) > 0:
+        area_req = (carga * 1000) / (u_global * lmtd)
+    else:
+        raise ValueError("Parâmetros de cálculo resultaram em área inválida")
+    
+    # Número de placas
     n_placas = math.ceil(area_req / m['area']) + 2
     if n_placas % 2 != 0:
         n_placas += 1
     
+    # Vazão de vapor (se aplicável)
     vapor_kgh = None
     if s.get('h_vap'):
         vapor_kgh = calc_vapor_kgh(carga, s['h_vap'])
@@ -135,7 +264,18 @@ def calc_dimensionamento(mod_key, prod_key, serv_key, v_prod, t1e, t1s, t2e, t2s
         "re_s": re_s
     }
 
+
 def generate_dimensional_svg(mod_key, n_placas):
+    """
+    Gera um SVG com visualização dimensional do trocador.
+    
+    Args:
+        mod_key: Chave do modelo
+        n_placas: Número de placas
+        
+    Returns:
+        str: SVG como string
+    """
     m = BANCO_MODELOS[mod_key]
     w = m['w'] / 4
     h = m['h'] / 4
@@ -162,7 +302,22 @@ def generate_dimensional_svg(mod_key, n_placas):
     """
     return svg
 
+
 def gerar_pdf(modelo, tag, projeto, produto, servico, res):
+    """
+    Gera um PDF com os resultados do dimensionamento.
+    
+    Args:
+        modelo: Modelo selecionado
+        tag: Tag do equipamento
+        projeto: Número do projeto
+        produto: Fluido produto
+        servico: Fluido serviço
+        res: Dicionário com resultados
+        
+    Returns:
+        bytes: Conteúdo do PDF
+    """
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=A4)
     styles = getSampleStyleSheet()
@@ -210,6 +365,7 @@ def gerar_pdf(modelo, tag, projeto, produto, servico, res):
     doc.build(elements)
     buffer.seek(0)
     return buffer.getvalue()
+
 
 def main():
     st.markdown("""
@@ -275,17 +431,22 @@ def main():
                 submitted = st.form_submit_button('CALCULAR DIMENSIONAMENTO', use_container_width=True, type='primary')
             
             if submitted:
-                resultados = calc_dimensionamento(modelo, produto, servico, vazao_prod, t_in_prod, t_out_prod, t_in_serv, t_out_serv)
-                pdf_bytes = gerar_pdf(modelo, tag, projeto, produto, servico, resultados)
-                st.session_state.resultados = resultados
-                st.session_state.pdf_bytes = pdf_bytes
-                st.session_state.modelo_res = modelo
-                st.session_state.tag_res = tag
-                st.session_state.projeto_res = projeto
-                st.session_state.produto_res = produto
-                st.session_state.servico_res = servico
-                st.success('Calculo realizado com sucesso!')
-                st.rerun()
+                try:
+                    resultados = calc_dimensionamento(modelo, produto, servico, vazao_prod, t_in_prod, t_out_prod, t_in_serv, t_out_serv)
+                    pdf_bytes = gerar_pdf(modelo, tag, projeto, produto, servico, resultados)
+                    st.session_state.resultados = resultados
+                    st.session_state.pdf_bytes = pdf_bytes
+                    st.session_state.modelo_res = modelo
+                    st.session_state.tag_res = tag
+                    st.session_state.projeto_res = projeto
+                    st.session_state.produto_res = produto
+                    st.session_state.servico_res = servico
+                    st.success('Calculo realizado com sucesso!')
+                    st.rerun()
+                except ValueError as e:
+                    st.error(f'❌ Erro no cálculo: {str(e)}')
+                except Exception as e:
+                    st.error(f'❌ Erro inesperado: {str(e)}')
         
         with result_col:
             if 'resultados' in st.session_state:
@@ -391,6 +552,7 @@ def main():
             st.write("**Jhonatan Dias Dejato** - Diretor de Engenharia | jhonatan@alfaved.com.br | (18) 99628-8714")
         else:
             st.warning("Execute o dimensionamento na aba 'Dimensionador' primeiro.")
+
 
 if __name__ == '__main__':
     main()
